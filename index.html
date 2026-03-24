@@ -18,9 +18,11 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
+    const STANDARD_INCHES = [3,6,9,12,18,24];
+    const SHOOT_INCHES    = [6,12,18,24,30,36,48];
     const BASES = {
-      round: {label:"Redonda", sizes:[[25],[28.5],[32],[40],[50],[60],[65],[80],[100],[130],[160]]},
-      oval:  {label:"Ovalada", sizes:[[60,35],[75,42],[90,52],[105,70],[120,92],[170,105]]},
+      round:       {label:"Redonda",    sizes:[[25],[28.5],[32],[40],[50],[60],[65],[80],[100],[130],[160]]},
+      oval:        {label:"Ovalada",    sizes:[[60,35],[75,42],[90,52],[105,70],[120,92],[170,105]]},
     };
     const sizeLabel = s => s.length===1?`${s[0]}mm`:`${s[0]}×${s[1]}mm`;
     const FACTION_COLORS = {"Adeptus Astartes":"#f97316","Orks":"#22c55e","Necrons":"#06b6d4","Chaos":"#a855f7","Tau":"#f59e0b"};
@@ -32,12 +34,23 @@
       shoot:     {label:"AD", full:"ARMA DIST.", color:"#38bdf8"},
     };
     const GAME_MODES = {
-      wh40k:         { strike_force:{label:"Strike Force (2000pts)",w:44,h:60}, incursion:{label:"Incursion (1000pts)",w:44,h:60}, combat_patrol:{label:"Combat Patrol (500pts)",w:44,h:30}, onslaught:{label:"Onslaught (3000pts)",w:44,h:90} },
-      age_of_sigmar: { standard:{label:"Estándar (2000pts)",w:44,h:60}, spearhead:{label:"Spearhead / Vanguard",w:22,h:30} },
-      kill_team:     { standard:{label:"Estándar",w:22,h:30}, gallowdark:{label:"Gallowdark",w:24,h:28} },
-      warcry:        { standard:{label:"Estándar",w:22,h:30} },
-      the_old_world: { standard:{label:"Estándar 44x60",w:44,h:60}, large:{label:"Grande 48x72",w:48,h:72} },
-      necromunda:    { standard:{label:"Estándar 48x48",w:48,h:48} },
+      wh40k: {
+        strike_force:  {label:"Strike Force (2000pts)", w:44,h:60},
+        incursion:     {label:"Incursion (1000pts)",    w:44,h:60},
+        combat_patrol: {label:"Combat Patrol (500pts)", w:44,h:30},
+        onslaught:     {label:"Onslaught (3000pts)",    w:44,h:90},
+      },
+      age_of_sigmar: {
+        standard:  {label:"Estándar (2000pts)",   w:44,h:60},
+        spearhead: {label:"Spearhead / Vanguard", w:22,h:30},
+      },
+      kill_team: {
+        standard:   {label:"Estándar",   w:22,h:30},
+        gallowdark: {label:"Gallowdark", w:24,h:28},
+      },
+      warcry:        {standard:{label:"Estándar",      w:22,h:30}},
+      the_old_world: {standard:{label:"Estándar 44x60",w:44,h:60}, large:{label:"Grande 48x72",w:48,h:72}},
+      necromunda:    {standard:{label:"Estándar 48x48",w:48,h:48}},
     };
     const DEFAULT_UNITS = [
       {id:1,name:"Space Marine",  faction:"Adeptus Astartes",baseType:"round",baseSize:[32], move:6, charge:12,influence:6, shoot:24,auras:{move:true,charge:true,influence:true,shoot:true}},
@@ -55,136 +68,12 @@
       {id:"m6",unitId:2,x:0.50,y:0.18,playerId:null},
     ];
     const TABS = ["TABLERO","JUGADORES","UNIDADES","CONFIG"];
-    const C = {bg:"#050d1a",panel:"#070f20",border:"#0e2a4a",accent:"#f97316",blue:"#38bdf8",text:"#c8dff5",muted:"#3a5a7a"};
+    const C = {bg:"#050d1a",panel:"#070f20",border:"#0e2a4a",accent:"#f97316",blue:"#38bdf8",text:"#c8dff5",muted:"#3a5a7a",glow:"rgba(249,115,22,0.18)",glowB:"rgba(56,189,248,0.12)"};
     const h2p = h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
-    const h2rgb = h=>h2p(h).join(',');
+    const h2rgb= h=>h2p(h).join(',');
 
-    const DEPLOY_ZONES = {
-      dawn_of_war:        {label:"Dawn of War",        desc:'12" borde largo'},
-      hammer_and_anvil:   {label:"Hammer & Anvil",     desc:'24" borde corto'},
-      spearhead_assault:  {label:"Spearhead Assault",  desc:'Diagonal, márgenes 12"'},
-      search_and_destroy: {label:"Search & Destroy",   desc:'Diagonal + exclusión 9" central'},
-      front_line_assault: {label:"Front-Line Assault", desc:'6" anchura, 15" profundidad'},
-      vanguard_strike:    {label:"Vanguard Strike",    desc:'Diagonal asimétrica, offset 12"'},
-    };
-
-    function drawDeploymentZone(ctx, W, H, BW, BH, zoneKey) {
-      // BW=44" (ancho, eje X), BH=60" (alto, eje Y)
-      const px = v => v * W / BW;
-      const py = v => v * H / BH;
-      const P1 = "rgba(249,115,22,0.25)", P2 = "rgba(56,189,248,0.25)";
-      const S1 = "#f97316", S2 = "#38bdf8";
-      const fillZone = (path, fill, stroke) => {
-        ctx.save(); ctx.beginPath(); path();
-        ctx.fillStyle=fill; ctx.fill();
-        ctx.strokeStyle=stroke; ctx.lineWidth=1.5; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
-      };
-
-      if (zoneKey==="dawn_of_war") {
-        // Franjas 12" desde borde LARGO (arriba/abajo)
-        fillZone(()=>ctx.rect(0,0,W,py(12)), P1, S1);
-        fillZone(()=>ctx.rect(0,H-py(12),W,py(12)), P2, S2);
-
-      } else if (zoneKey==="hammer_and_anvil") {
-  // 24" desde borde LARGO arriba, 24" desde borde LARGO abajo, 12" neutral en centro
-  fillZone(()=>ctx.rect(0,0,W,py(24)), P1, S1);
-fillZone(()=>ctx.rect(0,H-py(24),W,py(24)), P2, S2);
-
-      } else if (zoneKey==="spearhead_assault") {
-        // Triángulos desde borde CORTO (izq/der), 12" margen arriba/abajo, vértice a 9" del centro
-        // J1: desde borde izquierdo
-        fillZone(()=>{
-          ctx.moveTo(0, py(12));          // esquina izq-sup con margen 12"
-          ctx.lineTo(px(9), H/2);         // vértice a 9" del borde izq = centro
-          ctx.lineTo(0, H-py(12));        // esquina izq-inf con margen 12"
-          ctx.closePath();
-        }, P1, S1);
-        // J2: desde borde derecho, espejado
-        fillZone(()=>{
-          ctx.moveTo(W, py(12));
-          ctx.lineTo(W-px(9), H/2);
-          ctx.lineTo(W, H-py(12));
-          ctx.closePath();
-        }, P2, S2);
-
-      } else if (zoneKey==="search_and_destroy") {
-        // Franjas 15" desde borde LARGO (arriba/abajo) + exclusión 9" en centro
-        fillZone(()=>ctx.rect(0,0,W,py(15)), P1, S1);
-        fillZone(()=>ctx.rect(0,H-py(15),W,py(15)), P2, S2);
-        // Círculo exclusión 9"
-        ctx.save();
-        ctx.beginPath(); ctx.arc(W/2, H/2, px(9), 0, Math.PI*2);
-        ctx.fillStyle="rgba(5,13,26,0.85)"; ctx.fill();
-        ctx.strokeStyle="#f43f5e"; ctx.lineWidth=1.5; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle="#f43f5e"; ctx.font="bold 10px 'Rajdhani',monospace";
-        ctx.textAlign="center"; ctx.textBaseline="middle";
-        ctx.fillText('9" EXCL.', W/2, H/2); ctx.restore();
-
-      } else if (zoneKey==="front_line_assault") {
-        // Triángulos desde borde LARGO (arriba/abajo), vértice a 9" del centro, 6" ancho en punta
-        // J1: desde borde superior
-        fillZone(()=>{
-          ctx.moveTo(0, 0);
-          ctx.lineTo(W, 0);
-          ctx.lineTo(W/2+px(6), py(15));
-          ctx.lineTo(W/2, H/2-py(9));
-          ctx.lineTo(W/2-px(6), py(15));
-          ctx.closePath();
-        }, P1, S1);
-        // J2: desde borde inferior espejado
-        fillZone(()=>{
-          ctx.moveTo(0, H);
-          ctx.lineTo(W, H);
-          ctx.lineTo(W/2+px(6), H-py(15));
-          ctx.lineTo(W/2, H/2+py(9));
-          ctx.lineTo(W/2-px(6), H-py(15));
-          ctx.closePath();
-        }, P2, S2);
-
-      } else if (zoneKey==="vanguard_strike") {
-        // Diagonal asimétrica: 21.5" en borde largo, 14.5" en borde corto, 12" gap en centro
-        // J1: esquina inferior-izquierda
-        fillZone(()=>{
-          ctx.moveTo(0, H);                    // esquina inf-izq
-          ctx.lineTo(W, H);                    // borde inferior completo
-          ctx.lineTo(W, H-py(14.5));           // sube 14.5" por borde der
-          ctx.lineTo(W/2+px(12), H/2);         // al centro +12" en X
-          ctx.lineTo(W/2, H/2+py(12));         // al centro +12" en Y
-          ctx.lineTo(px(21.5), 0);             // borde sup a 21.5" del izq
-          ctx.lineTo(0, 0);                    // esquina sup-izq
-          ctx.closePath();
-        }, P1, S1);
-        // J2: esquina superior-derecha espejada
-        fillZone(()=>{
-          ctx.moveTo(W, 0);
-          ctx.lineTo(0, 0);
-          ctx.lineTo(0, py(14.5));
-          ctx.lineTo(W/2-px(12), H/2);
-          ctx.lineTo(W/2, H/2-py(12));
-          ctx.lineTo(W-px(21.5), H);
-          ctx.lineTo(W, H);
-          ctx.closePath();
-        }, P2, S2);
-      }
-
-      // Etiquetas
-      ctx.save(); ctx.font="bold 12px 'Rajdhani',monospace";
-      const lp = {
-        dawn_of_war:        [[W/2, py(6), S1,"J1"],[W/2, H-py(6), S2,"J2"]],
-        hammer_and_anvil:   [[px(12), H/2, S1,"J1"],[W-px(12), H/2, S2,"J2"]],
-        spearhead_assault:  [[px(3), H/2, S1,"J1"],[W-px(3), H/2, S2,"J2"]],
-        search_and_destroy: [[W/2, py(7), S1,"J1"],[W/2, H-py(7), S2,"J2"]],
-        front_line_assault: [[W/2, py(5), S1,"J1"],[W/2, H-py(5), S2,"J2"]],
-        vanguard_strike:    [[px(8), H-py(8), S1,"J1"],[W-px(8), py(8), S2,"J2"]],
-      };
-      (lp[zoneKey]||[]).forEach(([lx,ly,col,txt])=>{
-        ctx.fillStyle=col; ctx.textAlign="center"; ctx.textBaseline="middle";
-        ctx.shadowColor=col; ctx.shadowBlur=6; ctx.fillText(txt,lx,ly); ctx.shadowBlur=0;
-      });
-      ctx.restore();
-    }
     function drawAura(ctx,cx,cy,unit,W,H,pColor,selected,t){
-      const{baseType,baseSize,move,influence,shoot,charge,auras}=unit;
+      const {baseType,baseSize,move,influence,shoot,charge,auras}=unit;
       const TW=44*25.4,TH=60*25.4;
       const mmX=w=>w*W/TW, mmY=h=>h*H/TH;
       const sc=i=>i*25.4*((mmX(1)+mmY(1))/2);
@@ -192,51 +81,61 @@ fillZone(()=>ctx.rect(0,H-py(24),W,py(24)), P2, S2);
         ctx.beginPath();
         if(baseType==="round") ctx.arc(0,0,mmX(baseSize[0]/2)+ex,0,Math.PI*2);
         else if(baseType==="oval") ctx.ellipse(0,0,mmX(baseSize[0]/2)+ex,mmY(baseSize[1]/2)+ex,0,0,Math.PI*2);
-        else{const hw=mmX(baseSize[0]/2)+ex,hh=mmY((baseSize[1]||baseSize[0])/2)+ex,r=Math.max(ex,4);ctx.moveTo(-hw+r,-hh);ctx.lineTo(hw-r,-hh);ctx.arcTo(hw,-hh,hw,-hh+r,r);ctx.lineTo(hw,hh-r);ctx.arcTo(hw,hh,hw-r,hh,r);ctx.lineTo(-hw+r,hh);ctx.arcTo(-hw,hh,-hw,hh-r,r);ctx.lineTo(-hw,-hh+r);ctx.arcTo(-hw,-hh,-hw+r,-hh,r);ctx.closePath();}
+        else{
+          const hw=mmX(baseSize[0]/2)+ex, hh=mmY((baseSize[1]||baseSize[0])/2)+ex, r=Math.max(ex,4);
+          ctx.moveTo(-hw+r,-hh);ctx.lineTo(hw-r,-hh);ctx.arcTo(hw,-hh,hw,-hh+r,r);
+          ctx.lineTo(hw,hh-r);ctx.arcTo(hw,hh,hw-r,hh,r);
+          ctx.lineTo(-hw+r,hh);ctx.arcTo(-hw,hh,-hw,hh-r,r);
+          ctx.lineTo(-hw,-hh+r);ctx.arcTo(-hw,-hh,-hw+r,-hh,r);ctx.closePath();
+        }
       };
       const layer=(ex,color,dash,lw,pattern)=>{
         const[r,g,b]=h2p(color);
-        ctx.save();ctx.translate(cx,cy);buildPath(ctx,ex);
+        ctx.save();ctx.translate(cx,cy);
+        buildPath(ctx,ex);
         ctx.save();ctx.clip();ctx.globalAlpha=0.15;
-        if(pattern==='lines'){ctx.strokeStyle=color;ctx.lineWidth=0.8;ctx.setLineDash([4,8]);ctx.lineDashOffset=-(t*15)%12;for(let dy=-ex-8;dy<ex+8;dy+=9){ctx.beginPath();ctx.moveTo(-ex-8,dy);ctx.lineTo(ex+8,dy);ctx.stroke();}ctx.setLineDash([]);}
-        else if(pattern==='dots'){for(let dx=-ex-6;dx<ex+6;dx+=10)for(let dy=-ex-6;dy<ex+6;dy+=10){ctx.beginPath();ctx.arc(dx,dy,1.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();}}
-        else if(pattern==='grid'){ctx.strokeStyle=color;ctx.lineWidth=0.6;for(let dx=-ex-6;dx<ex+6;dx+=14){ctx.beginPath();ctx.moveTo(dx,-ex-6);ctx.lineTo(dx,ex+6);ctx.stroke();}for(let dy=-ex-6;dy<ex+6;dy+=14){ctx.beginPath();ctx.moveTo(-ex-6,dy);ctx.lineTo(ex+6,dy);ctx.stroke();}}
-        else if(pattern==='hex'){ctx.strokeStyle=color;ctx.lineWidth=0.8;for(let i=0;i<12;i++){const a=(i/12)*Math.PI*2+t*0.3;ctx.beginPath();ctx.moveTo(ex*.4*Math.cos(a),ex*.4*Math.sin(a));ctx.lineTo(ex*.85*Math.cos(a),ex*.85*Math.sin(a));ctx.stroke();}}
+        if(pattern==='lines'){
+          ctx.strokeStyle=color;ctx.lineWidth=0.8;ctx.setLineDash([4,8]);ctx.lineDashOffset=-(t*15)%12;
+          for(let dy=-ex-8;dy<ex+8;dy+=9){ctx.beginPath();ctx.moveTo(-ex-8,dy);ctx.lineTo(ex+8,dy);ctx.stroke();}
+          ctx.setLineDash([]);
+        } else if(pattern==='dots'){
+          for(let dx=-ex-6;dx<ex+6;dx+=10) for(let dy=-ex-6;dy<ex+6;dy+=10){ctx.beginPath();ctx.arc(dx,dy,1.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();}
+        } else if(pattern==='grid'){
+          ctx.strokeStyle=color;ctx.lineWidth=0.6;
+          for(let dx=-ex-6;dx<ex+6;dx+=14){ctx.beginPath();ctx.moveTo(dx,-ex-6);ctx.lineTo(dx,ex+6);ctx.stroke();}
+          for(let dy=-ex-6;dy<ex+6;dy+=14){ctx.beginPath();ctx.moveTo(-ex-6,dy);ctx.lineTo(ex+6,dy);ctx.stroke();}
+        } else if(pattern==='hex'){
+          ctx.strokeStyle=color;ctx.lineWidth=0.8;
+          for(let i=0;i<12;i++){const a=(i/12)*Math.PI*2+t*0.3;ctx.beginPath();ctx.moveTo(ex*.4*Math.cos(a),ex*.4*Math.sin(a));ctx.lineTo(ex*.85*Math.cos(a),ex*.85*Math.sin(a));ctx.stroke();}
+        }
         ctx.globalAlpha=1;ctx.restore();
         buildPath(ctx,ex);ctx.setLineDash(dash);ctx.strokeStyle=color;ctx.lineWidth=selected?lw+1:lw;
         ctx.shadowColor=color;ctx.shadowBlur=selected?16:7;ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.restore();
       };
-      if(auras?.shoot&&shoot>0)      layer(sc(shoot),   '#38bdf8',[3,5],1.2,'grid');
-      if(auras?.move&&move>0)        layer(sc(move),    '#22c55e',[],   1.6,'lines');
-      if(auras?.influence&&influence>0) layer(sc(influence),'#f97316',[],1.8,'dots');
-      if(auras?.charge&&charge>0)    layer(sc(charge),  '#a855f7',[6,4],1.3,'hex');
+      if(auras?.shoot   &&shoot>0)     layer(sc(shoot),   '#38bdf8',[3,5],1.2,'grid');
+      if(auras?.move    &&move>0)      layer(sc(move),    '#22c55e',[],   1.6,'lines');
+      if(auras?.influence&&influence>0) layer(sc(influence),'#f97316',[],  1.8,'dots');
+      if(auras?.charge  &&charge>0)    layer(sc(charge),  '#a855f7',[6,4],1.3,'hex');
       ctx.save();ctx.translate(cx,cy);buildPath(ctx,0);
       ctx.strokeStyle=`rgba(${h2rgb(pColor)},.5)`;ctx.lineWidth=0.8;ctx.setLineDash([3,2]);ctx.stroke();ctx.setLineDash([]);ctx.restore();
     }
 
     function App(){
-      const [tab,setTab]               = useState("TABLERO");
-      const [units,setUnits]           = useState(DEFAULT_UNITS);
-      const [players,setPlayers]       = useState([{id:1,name:"JUGADOR I",color:PLAYER_COLORS[0]},{id:2,name:"JUGADOR II",color:PLAYER_COLORS[1]}]);
-      const [minis,setMinis]           = useState(DEMO_MINIS);
-      const [selMini,setSelMini]       = useState(null);
+      const [tab,setTab]         = useState("TABLERO");
+      const [units,setUnits]     = useState(DEFAULT_UNITS);
+      const [players,setPlayers] = useState([{id:1,name:"JUGADOR I",color:PLAYER_COLORS[0]},{id:2,name:"JUGADOR II",color:PLAYER_COLORS[1]}]);
+      const [minis,setMinis]     = useState(DEMO_MINIS);
+      const [selMini,setSelMini] = useState(null);
       const [assignMenu,setAssignMenu] = useState(null);
       const [activeAuras,setActiveAuras] = useState({move:true,influence:true,shoot:true,charge:true});
-      const [activeGame,setActiveGame] = useState("wh40k");
-      const [activeMode,setActiveMode] = useState("strike_force");
-      const [showLegend,setShowLegend] = useState(false);
-      const [showDeployMenu,setShowDeployMenu] = useState(false);
-      const [activeZone,setActiveZone] = useState(null);
-      const [tick,setTick]             = useState(0);
+      const [activeGame,setActiveGame]   = useState("wh40k");
+      const [activeMode,setActiveMode]   = useState("strike_force");
+      const [editUnit,setEditUnit]       = useState(null);
+      const [showLegend,setShowLegend]   = useState(false);
+      const [tick,setTick] = useState(0);
       const canvasRef = useRef(null);
 
       useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),80);return()=>clearInterval(i);},[]);
-      useEffect(()=>{
-        if(!showDeployMenu) return;
-        const close=()=>setShowDeployMenu(false);
-        document.addEventListener('click',close);
-        return()=>document.removeEventListener('click',close);
-      },[showDeployMenu]);
 
       useEffect(()=>{
         if(tab!=="TABLERO") return;
@@ -247,7 +146,6 @@ fillZone(()=>ctx.rect(0,H-py(24),W,py(24)), P2, S2);
         ctx.strokeStyle="rgba(14,42,74,0.7)";ctx.lineWidth=0.5;
         for(let x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
         for(let y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-        if(activeZone){const mode=GAME_MODES[activeGame][activeMode];drawDeploymentZone(ctx,W,H,mode.w,mode.h,activeZone);}
         [[0,0],[W,0],[0,H],[W,H]].forEach(([x,y])=>{
           const s=16,ox=x===0?1:-1,oy=y===0?1:-1;
           ctx.strokeStyle=C.accent;ctx.lineWidth=1.5;
@@ -260,14 +158,15 @@ fillZone(()=>ctx.rect(0,H-py(24),W,py(24)), P2, S2);
           const cx=mini.x*W,cy=mini.y*H,color=player?player.color:C.muted;
           const fu={...unit,auras:{move:unit.auras.move&&activeAuras.move,influence:unit.auras.influence&&activeAuras.influence,shoot:unit.auras.shoot&&activeAuras.shoot,charge:unit.auras.charge&&activeAuras.charge}};
           drawAura(ctx,cx,cy,fu,W,H,color,selMini===mini.id,t);
-          ctx.save();ctx.translate(cx,cy);ctx.shadowColor=color;ctx.shadowBlur=14;
+          ctx.save();ctx.translate(cx,cy);
+          ctx.shadowColor=color;ctx.shadowBlur=14;
           ctx.beginPath();ctx.arc(0,0,9,0,Math.PI*2);
           const[r,g,b]=h2p(color);ctx.fillStyle=`rgba(${r},${g},${b},0.2)`;ctx.fill();
           ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();ctx.shadowBlur=0;
           ctx.fillStyle=color;ctx.font="bold 9px 'Rajdhani',monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(unit.name[0],0,0);ctx.restore();
           if(!player){ctx.beginPath();ctx.arc(cx+10,cy-10,5,0,Math.PI*2);ctx.fillStyle=C.accent;ctx.shadowColor=C.accent;ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;ctx.fillStyle=C.bg;ctx.font="bold 7px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",cx+10,cy-10);}
         });
-      },[tab,minis,units,players,selMini,tick,activeAuras,activeZone,activeGame,activeMode]);
+      },[tab,minis,units,players,selMini,tick,activeAuras]);
 
       const handleClick=(e)=>{
         const r=canvasRef.current.getBoundingClientRect();
@@ -277,171 +176,145 @@ fillZone(()=>ctx.rect(0,H-py(24),W,py(24)), P2, S2);
         if(cl){setSelMini(cl.id);setAssignMenu({miniId:cl.id,x:e.clientX-r.left,y:e.clientY-r.top});}
         else{setSelMini(null);setAssignMenu(null);}
       };
+
       const assignPlayer=(miniId,playerId)=>{setMinis(prev=>prev.map(m=>m.id===miniId?{...m,playerId}:m));setAssignMenu(null);setSelMini(null);};
 
       const css=`
         .rb{border:1px solid #0e2a4a;background:transparent;color:#3a5a7a;cursor:pointer;font-family:'Rajdhani',monospace;font-weight:600;letter-spacing:1px;transition:all .2s;}
-        .rb:hover{border-color:#f97316;color:#f97316;}
-        .rb.on{border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.18);}
+        .rb:hover{border-color:#f97316;color:#f97316;box-shadow:0 0 8px rgba(249,115,22,0.18);}
+        .rb.on{border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.18);box-shadow:0 0 14px rgba(249,115,22,0.18);}
         .rb.bon{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,0.12);}
+        .rb.gon{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.12);}
+        .rb.pon{border-color:#a855f7;color:#a855f7;background:rgba(168,85,247,.12);}
+        .rb.con{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,.12);}
         .panel{background:#070f20;border:1px solid #0e2a4a;position:relative;overflow:hidden;}
         .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#f97316,transparent);opacity:.4;}
+        .inp{width:100%;background:#050d1a;border:1px solid #0e2a4a;border-radius:3px;padding:5px 8px;color:#c8dff5;font-family:'Rajdhani',monospace;font-size:13px;outline:none;}
+        select.inp option{background:#070f20;}
         .tag{font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:2px;}
         .pulse{animation:pulse 2s ease-in-out infinite;}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        .tgl{width:34px;height:18px;border-radius:9px;border:1px solid #0e2a4a;background:transparent;cursor:pointer;position:relative;transition:all .2s;flex-shrink:0;}
+        .tgl::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#3a5a7a;transition:all .2s;}
+        .tgl.on::after{background:var(--tc);transform:translateX(16px);}
+        .tgl.on{border-color:var(--tc);background:rgba(var(--tr),var(--tg),var(--tb),.18);}
         ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:#050d1a;}::-webkit-scrollbar-thumb{background:#0e2a4a;}
       `;
 
-      return(
+      const Toggle=({on,color,onChange})=>{
+        const[r,g,b]=h2p(color);
+        return React.createElement('button',{className:`tgl ${on?"on":""}`,style:{'--tc':color,'--tr':r,'--tg':g,'--tb':b},onClick:onChange});
+      };
+
+      return (
         <div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Rajdhani',monospace",color:C.text}}>
           <style>{css}</style>
+
+          {/* Header */}
           <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`,padding:"9px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"relative"}}>
             <div style={{position:"absolute",bottom:0,left:0,right:0,height:"1px",background:`linear-gradient(90deg,transparent,${C.accent},transparent)`,opacity:.4}}/>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
               <div style={{width:7,height:7,borderRadius:"50%",background:C.accent,boxShadow:`0 0 7px ${C.accent}`}} className="pulse"/>
               <span style={{fontWeight:700,fontSize:15,letterSpacing:3,color:C.accent}}>WARGAME</span>
               <span style={{fontWeight:400,fontSize:15,letterSpacing:3,color:C.text}}>VISION SYS</span>
-              <span style={{color:C.muted,fontSize:11,letterSpacing:1}}>// v1.1</span>
+              <span style={{color:C.muted,fontSize:11,letterSpacing:1}}>// v1.0 DEMO</span>
             </div>
             <div style={{display:"flex",gap:5,alignItems:"center",fontSize:11,color:C.muted,letterSpacing:1}}>
               <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",display:"inline-block",boxShadow:"0 0 6px #22c55e"}}/>
               PROTOTIPO UI
             </div>
           </div>
+
+          {/* Tabs */}
           <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.panel}}>
             {TABS.map((t,i)=>(
               <button key={t} className={`rb ${tab===t?"on":""}`} onClick={()=>setTab(t)}
-                style={{padding:"9px 18px",borderRadius:0,fontSize:11,letterSpacing:2,borderLeft:i>0?`1px solid ${C.border}`:"none",borderTop:"none",borderRight:"none",borderBottom:tab===t?`2px solid ${C.accent}`:"2px solid transparent"}}>
+                style={{padding:"9px 18px",borderRadius:0,fontSize:11,letterSpacing:2,
+                  borderLeft:i>0?`1px solid ${C.border}`:"none",borderTop:"none",borderRight:"none",
+                  borderBottom:tab===t?`2px solid ${C.accent}`:"2px solid transparent"}}>
                 {t}
               </button>
             ))}
+            <div style={{flex:1,borderBottom:"2px solid transparent"}}/>
           </div>
 
+          {/* TABLERO */}
           {tab==="TABLERO"&&(
-            <div style={{padding:14,display:"flex",gap:14}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{marginBottom:8,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
-                  {Object.entries(AURA_TYPES).map(([key,{label,color}])=>{
-                    const[r,g,b]=h2p(color);
-                    return(
-                      <button key={key} onClick={()=>setActiveAuras(prev=>({...prev,[key]:!prev[key]}))}
-                        style={{display:"flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:2,cursor:"pointer",
-                          border:`1px solid ${activeAuras[key]?color:C.border}`,
-                          background:activeAuras[key]?`rgba(${r},${g},${b},.1)`:"transparent",
-                          color:activeAuras[key]?color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
-                        <div style={{width:5,height:5,borderRadius:"50%",background:activeAuras[key]?color:C.muted}}/>{label}
-                      </button>
-                    );
-                  })}
-                  <button onClick={()=>setShowLegend(true)} className="rb" style={{padding:"3px 9px",fontSize:11,letterSpacing:1,borderColor:C.blue,color:C.blue}}>? ÍNDICE</button>
-                  <div style={{position:"relative"}} onClick={e=>e.stopPropagation()}>
-                    <button onClick={()=>setShowDeployMenu(v=>!v)} className="rb"
-                      style={{padding:"3px 9px",fontSize:11,letterSpacing:1,
-                        borderColor:activeZone?"#22c55e":C.border,color:activeZone?"#22c55e":C.muted,
-                        background:activeZone?"rgba(34,197,94,0.1)":"transparent"}}>
-                      ⬡ DESPLIEGUE{activeZone?` — ${DEPLOY_ZONES[activeZone].label}`:""}
+            <div style={{padding:14}}>
+              <div style={{marginBottom:8,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                {Object.entries(AURA_TYPES).map(([key,{label,color}])=>{
+                  const[r,g,b]=h2p(color);
+                  return(
+                    <button key={key} onClick={()=>setActiveAuras(prev=>({...prev,[key]:!prev[key]}))}
+                      style={{display:"flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:2,cursor:"pointer",
+                        border:`1px solid ${activeAuras[key]?color:C.border}`,
+                        background:activeAuras[key]?`rgba(${r},${g},${b},.1)`:"transparent",
+                        color:activeAuras[key]?color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
+                      <div style={{width:5,height:5,borderRadius:"50%",background:activeAuras[key]?color:C.muted}}/>
+                      {label} — {Object.values(AURA_TYPES).find(a=>a.label===label)?.full}
                     </button>
-                    {showDeployMenu&&(
-                      <div style={{position:"absolute",top:"110%",left:0,zIndex:20,background:C.panel,border:`1px solid ${C.border}`,borderRadius:2,padding:8,minWidth:240,boxShadow:"0 0 20px rgba(0,0,0,0.5)"}}>
-                        <div style={{fontSize:10,color:C.muted,letterSpacing:2,marginBottom:8}}>ZONA DE DESPLIEGUE</div>
-                        {Object.entries(DEPLOY_ZONES).map(([key,{label,desc}])=>(
-                          <button key={key} onClick={()=>{setActiveZone(activeZone===key?null:key);setShowDeployMenu(false);}}
-                            style={{display:"block",width:"100%",textAlign:"left",padding:"6px 8px",
-                              background:activeZone===key?"rgba(34,197,94,0.12)":"transparent",
-                              border:"none",borderRadius:2,cursor:"pointer",marginBottom:3,
-                              color:activeZone===key?"#22c55e":C.text,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>
-                            <div>{label}</div>
-                            <div style={{fontSize:10,color:C.muted,fontWeight:400}}>{desc}</div>
-                          </button>
-                        ))}
-                        {activeZone&&<button onClick={()=>{setActiveZone(null);setShowDeployMenu(false);}}
-                          style={{display:"block",width:"100%",padding:"5px 8px",marginTop:4,background:"transparent",
-                            border:"1px solid #f43f5e",borderRadius:2,cursor:"pointer",color:"#f43f5e",
-                            fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>
-                          ✕ OCULTAR ZONA
-                        </button>}
-                      </div>
-                    )}
-                  </div>
-                  {minis.filter(m=>!m.playerId).length>0&&(
-                    <span className="tag pulse" style={{background:"rgba(249,115,22,.1)",color:C.accent,border:"1px solid #7c3100",marginLeft:"auto"}}>
-                      ⚠ {minis.filter(m=>!m.playerId).length} SIN ASIGNAR
-                    </span>
-                  )}
-                </div>
-                <div style={{position:"relative"}}>
-                  <canvas ref={canvasRef} width={700} height={520} onClick={handleClick}
-                    style={{borderRadius:2,border:`1px solid ${C.border}`,cursor:"crosshair",display:"block",width:"100%",height:"auto"}}/>
-                  {assignMenu&&(
-                    <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:160,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
-                      <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
-                      {players.map(p=>(
-                        <button key={p.id} onClick={()=>assignPlayer(assignMenu.miniId,p.id)}
-                          style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"5px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.text,fontSize:12,fontFamily:"'Rajdhani',monospace",fontWeight:600,letterSpacing:1}}
-                          onMouseEnter={e=>e.currentTarget.style.background="rgba(249,115,22,0.18)"}
-                          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                          <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>{p.name}
-                        </button>
-                      ))}
-                      <div style={{borderTop:`1px solid ${C.border}`,margin:"3px 0"}}/>
-                      <button onClick={()=>assignPlayer(assignMenu.miniId,null)}
-                        style={{width:"100%",padding:"4px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.muted,fontSize:11,fontFamily:"'Rajdhani',monospace",letterSpacing:1,textAlign:"left"}}>
-                        ✕ DESASIGNAR
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div style={{marginTop:8,display:"flex",gap:14,flexWrap:"wrap"}}>
-                  {players.map(p=>(
-                    <div key={p.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,letterSpacing:1}}>
-                      <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>
-                      <span style={{color:p.color,fontWeight:600}}>{p.name}</span>
-                      <span style={{color:C.muted}}>· {minis.filter(m=>m.playerId===p.id).length} UNIDADES</span>
-                    </div>
-                  ))}
-                </div>
+                  );
+                })}
+                {minis.filter(m=>!m.playerId).length>0&&(
+                  <span className="tag pulse" style={{background:"rgba(249,115,22,.1)",color:C.accent,border:`1px solid #7c3100`,marginLeft:"auto"}}>
+                    ⚠ {minis.filter(m=>!m.playerId).length} SIN ASIGNAR
+                  </span>
+                )}
               </div>
-              <div style={{width:200,flexShrink:0}}>
-                <div className="panel" style={{borderRadius:2,padding:12,marginBottom:10}}>
-                  <div style={{color:C.muted,fontSize:10,letterSpacing:2,marginBottom:10}}>JUGADORES</div>
-                  {players.map(p=>(
-                    <div key={p.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,padding:"5px 7px",borderRadius:2,background:C.bg}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>
-                      <span style={{flex:1,color:p.color,fontWeight:600,fontSize:11,letterSpacing:1}}>{p.name}</span>
-                    </div>
-                  ))}
-                  <button className="rb" onClick={()=>setPlayers(prev=>{const id=Math.max(...prev.map(p=>p.id))+1;return[...prev,{id,name:`JUGADOR ${["I","II","III","IV","V","VI"][id-1]||id}`,color:PLAYER_COLORS[(id-1)%PLAYER_COLORS.length]}];})}
-                    style={{width:"100%",marginTop:3,textAlign:"center",padding:6,fontSize:11}}>+ JUGADOR</button>
-                </div>
-                <div className="panel" style={{borderRadius:2,padding:12}}>
-                  <div style={{color:C.muted,fontSize:10,letterSpacing:2,marginBottom:10}}>UNIDADES EN JUEGO</div>
-                  {minis.map(m=>{const u=units.find(x=>x.id===m.unitId);const p=players.find(x=>x.id===m.playerId);return u?(
-                    <div key={m.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,padding:"5px 7px",borderRadius:2,background:C.bg}}>
-                      <div style={{width:6,height:6,borderRadius:"50%",background:p?p.color:C.muted}}/>
-                      <span style={{fontSize:11,letterSpacing:1,color:p?p.color:C.muted}}>{u.name}</span>
-                    </div>
-                  ):null;})}
-                </div>
+              <div style={{position:"relative",display:"inline-block"}}>
+                <canvas ref={canvasRef} width={520} height={400} onClick={handleClick}
+                  style={{borderRadius:2,border:`1px solid ${C.border}`,cursor:"crosshair",display:"block"}}/>
+                {assignMenu&&(
+                  <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,
+                    background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:160,boxShadow:`0 0 18px rgba(249,115,22,0.18)`}}>
+                    <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
+                    {players.map(p=>(
+                      <button key={p.id} onClick={()=>assignPlayer(assignMenu.miniId,p.id)}
+                        style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"5px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.text,fontSize:12,fontFamily:"'Rajdhani',monospace",fontWeight:600,letterSpacing:1}}
+                        onMouseEnter={e=>e.currentTarget.style.background="rgba(249,115,22,0.18)"}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>
+                        {p.name}
+                      </button>
+                    ))}
+                    <div style={{borderTop:`1px solid ${C.border}`,margin:"3px 0"}}/>
+                    <button onClick={()=>assignPlayer(assignMenu.miniId,null)}
+                      style={{width:"100%",padding:"4px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.muted,fontSize:11,fontFamily:"'Rajdhani',monospace",letterSpacing:1,textAlign:"left"}}>
+                      ✕ DESASIGNAR
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div style={{marginTop:8,display:"flex",gap:14,flexWrap:"wrap"}}>
+                {players.map(p=>(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,letterSpacing:1}}>
+                    <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>
+                    <span style={{color:p.color,fontWeight:600}}>{p.name}</span>
+                    <span style={{color:C.muted}}>· {minis.filter(m=>m.playerId===p.id).length} UNIDADES</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
+          {/* JUGADORES */}
           {tab==="JUGADORES"&&(
-            <div style={{padding:14,maxWidth:420}}>
+            <div style={{padding:14,maxWidth:400}}>
               <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:12}}>// REGISTRO DE JUGADORES</div>
               {players.map(p=>(
                 <div key={p.id} className="panel" style={{borderRadius:2,padding:10,marginBottom:7,display:"flex",alignItems:"center",gap:10,borderLeft:`2px solid ${p.color}`}}>
                   <div style={{width:12,height:12,borderRadius:"50%",background:p.color,boxShadow:`0 0 8px ${p.color}`,flexShrink:0}}/>
                   <span style={{flex:1,fontWeight:700,letterSpacing:1,color:p.color,fontSize:13}}>{p.name}</span>
                   <span className="tag" style={{color:p.color,background:`rgba(${h2rgb(p.color)},.1)`}}>{minis.filter(m=>m.playerId===p.id).length} UNID.</span>
-                  <button onClick={()=>setPlayers(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"2px 7px",fontSize:11}}>✕</button>
+                  <button onClick={()=>setPlayers(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"2px 7px",borderRadius:2,fontSize:11}}>✕</button>
                 </div>
               ))}
-              <button onClick={()=>setPlayers(prev=>{const id=Math.max(...prev.map(p=>p.id))+1;return[...prev,{id,name:`JUGADOR ${["I","II","III","IV","V","VI"][id-1]||id}`,color:PLAYER_COLORS[(id-1)%PLAYER_COLORS.length]}];})}
-                className="rb" style={{width:"100%",padding:"9px",fontSize:11,letterSpacing:2,marginTop:3}}>+ AÑADIR JUGADOR</button>
+              <button onClick={()=>{const id=Math.max(...players.map(p=>p.id))+1;setPlayers(prev=>[...prev,{id,name:`JUGADOR ${["I","II","III","IV","V","VI"][id-1]||id}`,color:PLAYER_COLORS[(id-1)%PLAYER_COLORS.length]}]);}}
+                className="rb" style={{width:"100%",padding:"9px",borderRadius:2,fontSize:11,letterSpacing:2,marginTop:3}}>+ AÑADIR JUGADOR</button>
             </div>
           )}
 
+          {/* UNIDADES */}
           {tab==="UNIDADES"&&(
             <div style={{padding:14,maxWidth:560}}>
               <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:12}}>// BASE DE DATOS DE UNIDADES</div>
@@ -449,11 +322,12 @@ fillZone(()=>ctx.rect(0,H-py(24),W,py(24)), P2, S2);
                 <div key={u.id} className="panel" style={{borderRadius:2,padding:10,marginBottom:7,borderLeft:`2px solid ${FACTION_COLORS[u.faction]||C.muted}`}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                     <span style={{fontWeight:700,fontSize:13,letterSpacing:2,color:FACTION_COLORS[u.faction]||C.text,flex:1,textTransform:"uppercase"}}>{u.name}</span>
-                    <span className="tag" style={{background:"rgba(56,189,248,0.12)",color:C.blue,border:"1px solid #0c4a6e",fontSize:10}}>{BASES[u.baseType].label.toUpperCase()} {sizeLabel(u.baseSize)}</span>
+                    <span className="tag" style={{background:"rgba(56,189,248,0.12)",color:C.blue,border:`1px solid #0c4a6e`,fontSize:10}}>{BASES[u.baseType].label.toUpperCase()} {sizeLabel(u.baseSize)}</span>
                   </div>
                   <div style={{display:"flex",gap:4}}>
                     {Object.entries(AURA_TYPES).map(([key,{label,color}])=>{
-                      const active=u.auras[key],val=u[key];const[r,g,b]=h2p(color);
+                      const active=u.auras[key],val=u[key];
+                      const[r,g,b]=h2p(color);
                       return(
                         <div key={key} style={{flex:1,textAlign:"center",opacity:active?1:0.3}}>
                           <div style={{fontSize:10,fontWeight:700,letterSpacing:1,color:active?color:C.muted,marginBottom:3}}>{label}</div>
@@ -469,18 +343,19 @@ fillZone(()=>ctx.rect(0,H-py(24),W,py(24)), P2, S2);
             </div>
           )}
 
+          {/* CONFIG */}
           {tab==="CONFIG"&&(
             <div style={{padding:14,maxWidth:480}}>
               <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:12}}>// PARÁMETROS DEL SISTEMA</div>
-              <div className="panel" style={{borderRadius:2,padding:16}}>
+              <div className="panel" style={{borderRadius:2,padding:16,marginBottom:10}}>
                 <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:12}}>JUEGO ACTIVO</div>
                 <div style={{marginBottom:12}}>
                   <label style={{color:C.muted,fontSize:10,letterSpacing:1,display:"block",marginBottom:6}}>SISTEMA DE JUEGO</label>
                   <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                     {[["wh40k","WH 40K"],["age_of_sigmar","AOS"],["kill_team","KILL TEAM"],["warcry","WARCRY"],["the_old_world","OLD WORLD"],["necromunda","NECROMUNDA"]].map(([key,label])=>(
                       <button key={key} className={`rb ${activeGame===key?"on":""}`}
-                        onClick={()=>{setActiveGame(key);setActiveMode(Object.keys(GAME_MODES[key])[0]);setActiveZone(null);}}
-                        style={{padding:"4px 10px",fontSize:11,letterSpacing:1}}>{label}</button>
+                        onClick={()=>{setActiveGame(key);setActiveMode(Object.keys(GAME_MODES[key])[0]);}}
+                        style={{padding:"4px 10px",borderRadius:2,fontSize:11,letterSpacing:1}}>{label}</button>
                     ))}
                   </div>
                 </div>
@@ -489,44 +364,35 @@ fillZone(()=>ctx.rect(0,H-py(24),W,py(24)), P2, S2);
                   <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                     {Object.entries(GAME_MODES[activeGame]).map(([key,{label}])=>(
                       <button key={key} className={`rb ${activeMode===key?"bon":""}`} onClick={()=>setActiveMode(key)}
-                        style={{padding:"4px 10px",fontSize:11,letterSpacing:1}}>{label}</button>
+                        style={{padding:"4px 10px",borderRadius:2,fontSize:11,letterSpacing:1}}>{label}</button>
                     ))}
                   </div>
                 </div>
                 <div style={{background:C.bg,borderRadius:2,padding:10,border:`1px solid ${C.border}`}}>
                   <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
-                    <div><div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:3}}>TABLERO</div><div style={{fontSize:14,fontWeight:700,color:C.blue}}>{GAME_MODES[activeGame][activeMode].w}" × {GAME_MODES[activeGame][activeMode].h}"</div></div>
-                    <div><div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:3}}>ESCALA X</div><div style={{fontSize:14,fontWeight:700,color:C.blue}}>{(1000/GAME_MODES[activeGame][activeMode].w).toFixed(1)} px/inch</div></div>
-                    <div><div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:3}}>ESCALA Y</div><div style={{fontSize:14,fontWeight:700,color:C.blue}}>{(1000/GAME_MODES[activeGame][activeMode].h).toFixed(1)} px/inch</div></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {showLegend&&(
-            <div style={{position:"fixed",inset:0,background:"rgba(5,13,26,.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50}} onClick={()=>setShowLegend(false)}>
-              <div className="panel" style={{borderRadius:4,padding:22,width:340,borderColor:C.blue}} onClick={e=>e.stopPropagation()}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                  <span style={{color:C.blue,fontWeight:700,letterSpacing:2,fontSize:13}}>// ÍNDICE DE AURAS</span>
-                  <button onClick={()=>setShowLegend(false)} className="rb" style={{padding:"2px 8px",fontSize:12}}>✕</button>
-                </div>
-                {Object.entries(AURA_TYPES).map(([key,{label,full,color}])=>(
-                  <div key={key} style={{marginBottom:10,padding:10,background:C.bg,borderRadius:2,borderLeft:`3px solid ${color}`}}>
-                    <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
-                      <div style={{width:9,height:9,borderRadius:"50%",background:color,boxShadow:`0 0 7px ${color}`}}/>
-                      <span style={{fontWeight:700,fontSize:13,color,letterSpacing:1}}>{label} — {full}</span>
+                    <div>
+                      <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:3}}>TABLERO</div>
+                      <div style={{fontSize:14,fontWeight:700,color:C.blue}}>{GAME_MODES[activeGame][activeMode].w}" × {GAME_MODES[activeGame][activeMode].h}"</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:3}}>ESCALA X</div>
+                      <div style={{fontSize:14,fontWeight:700,color:C.blue}}>{(1000/GAME_MODES[activeGame][activeMode].w).toFixed(1)} px/inch</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:3}}>ESCALA Y</div>
+                      <div style={{fontSize:14,fontWeight:700,color:C.blue}}>{(1000/GAME_MODES[activeGame][activeMode].h).toFixed(1)} px/inch</div>
                     </div>
                   </div>
-                ))}
-                <div style={{fontSize:10,color:C.muted,letterSpacing:1,textAlign:"center",marginTop:8}}>CLIC FUERA PARA CERRAR</div>
+                </div>
               </div>
             </div>
           )}
         </div>
       );
     }
+
     ReactDOM.render(React.createElement(App), document.getElementById('root'));
   </script>
 </body>
 </html>
+
