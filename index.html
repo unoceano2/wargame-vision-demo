@@ -86,9 +86,9 @@
         fillZone(()=>ctx.rect(0,H-py(12),W,py(12)), P2, S2);
 
       } else if (zoneKey==="hammer_and_anvil") {
-        // Franjas 24" desde borde CORTO (izq/der)
-        fillZone(()=>ctx.rect(0,0,px(24),H), P1, S1);
-        fillZone(()=>ctx.rect(W-px(24),0,px(24),H), P2, S2);
+  // 24" desde borde LARGO arriba, 24" desde borde LARGO abajo, 12" neutral en centro
+  fillZone(()=>ctx.rect(0, 0, W, py(24)), P1, S1);
+  fillZone(()=>ctx.rect(0, H-py(24), W, py(24)), P2, S2);
 
       } else if (zoneKey==="spearhead_assault") {
         // Triángulos desde borde CORTO (izq/der), 12" margen arriba/abajo, vértice a 9" del centro
