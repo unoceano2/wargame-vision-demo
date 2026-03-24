@@ -71,46 +71,126 @@
     function drawDeploymentZone(ctx, W, H, BW, BH, zoneKey) {
       const px = v => v * W / BW;
       const py = v => v * H / BH;
-      const P1 = "rgba(249,115,22,0.18)", P2 = "rgba(56,189,248,0.18)";
+      const P1 = "rgba(249,115,22,0.25)", P2 = "rgba(56,189,248,0.25)";
       const S1 = "#f97316", S2 = "#38bdf8";
       const fillZone = (path, fill, stroke) => {
         ctx.save(); ctx.beginPath(); path();
         ctx.fillStyle=fill; ctx.fill();
         ctx.strokeStyle=stroke; ctx.lineWidth=1.5; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
       };
+
       if (zoneKey==="dawn_of_war") {
+        // Franjas 12" desde borde largo (arriba/abajo)
         fillZone(()=>ctx.rect(0,0,W,py(12)), P1, S1);
         fillZone(()=>ctx.rect(0,H-py(12),W,py(12)), P2, S2);
+
       } else if (zoneKey==="hammer_and_anvil") {
+        // Franjas 24" desde borde corto (izq/der)
         fillZone(()=>ctx.rect(0,0,px(24),H), P1, S1);
         fillZone(()=>ctx.rect(W-px(24),0,px(24),H), P2, S2);
+
       } else if (zoneKey==="spearhead_assault") {
-        fillZone(()=>{ctx.moveTo(0,py(BH-12));ctx.lineTo(0,H);ctx.lineTo(px(BW-12),H);ctx.closePath();}, P1, S1);
-        fillZone(()=>{ctx.moveTo(px(12),0);ctx.lineTo(W,0);ctx.lineTo(W,py(12));ctx.closePath();}, P2, S2);
+        // Triángulos desde esquinas opuestas apuntando al centro
+        // J1: esquina sup-izq → vértice en centro (9"+9" = 18" desde centro, o sea el centro exacto)
+        // Margen 12" en cada esquina del borde corto
+        // J1: triángulo sup-izq: (0,0),(BW/2-9",BH/2),(0,BH) menos esquinas 12"
+        fillZone(()=>{
+          ctx.moveTo(0, py(12));
+          ctx.lineTo(W/2 - px(9), H/2);
+          ctx.lineTo(0, H - py(12));
+          ctx.closePath();
+        }, P1, S1);
+        // J2: triángulo inf-der espejado
+        fillZone(()=>{
+          ctx.moveTo(W, py(12));
+          ctx.lineTo(W/2 + px(9), H/2);
+          ctx.lineTo(W, H - py(12));
+          ctx.closePath();
+        }, P2, S2);
+
       } else if (zoneKey==="search_and_destroy") {
-        fillZone(()=>{ctx.moveTo(0,py(BH-12));ctx.lineTo(0,H);ctx.lineTo(px(BW-12),H);ctx.closePath();}, P1, S1);
-        fillZone(()=>{ctx.moveTo(px(12),0);ctx.lineTo(W,0);ctx.lineTo(W,py(12));ctx.closePath();}, P2, S2);
-        ctx.save(); ctx.beginPath(); ctx.arc(W/2,H/2,px(9),0,Math.PI*2);
-        ctx.fillStyle="rgba(5,13,26,0.7)"; ctx.fill();
+        // Igual que Spearhead pero zonas de 15" desde borde largo y exclusión 9" centro
+        // J1: franja superior 15" + triángulo apuntando al centro
+        fillZone(()=>{
+          ctx.moveTo(0, 0);
+          ctx.lineTo(W, 0);
+          ctx.lineTo(W, py(15));
+          ctx.lineTo(W/2 + px(27), H/2);
+          ctx.lineTo(W/2 - px(27), H/2);
+          ctx.lineTo(0, py(15));
+          ctx.closePath();
+        }, P1, S1);
+        // J2: franja inferior 15"
+        fillZone(()=>{
+          ctx.moveTo(0, H);
+          ctx.lineTo(W, H);
+          ctx.lineTo(W, H - py(15));
+          ctx.lineTo(W/2 + px(27), H/2);
+          ctx.lineTo(W/2 - px(27), H/2);
+          ctx.lineTo(0, H - py(15));
+          ctx.closePath();
+        }, P2, S2);
+        // Círculo exclusión 9"
+        ctx.save();
+        ctx.beginPath(); ctx.arc(W/2, H/2, px(9), 0, Math.PI*2);
+        ctx.fillStyle="rgba(5,13,26,0.85)"; ctx.fill();
         ctx.strokeStyle="#f43f5e"; ctx.lineWidth=1.5; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle="#f43f5e"; ctx.font="bold 10px 'Rajdhani',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillStyle="#f43f5e"; ctx.font="bold 10px 'Rajdhani',monospace";
+        ctx.textAlign="center"; ctx.textBaseline="middle";
         ctx.fillText('9" EXCL.', W/2, H/2); ctx.restore();
+
       } else if (zoneKey==="front_line_assault") {
-        const zW=px(6), zH=py(15), lX=(W/2)-zW/2;
-        fillZone(()=>ctx.rect(lX,0,zW,zH), P1, S1);
-        fillZone(()=>ctx.rect(lX,H-zH,zW,zH), P2, S2);
+        // Triángulos desde borde largo apuntando al centro, 6" ancho en centro, 15" profundidad
+        // J1: triángulo superior — base en borde sup, vértice a 9" del centro hacia arriba
+        fillZone(()=>{
+          ctx.moveTo(0, 0);
+          ctx.lineTo(W, 0);
+          ctx.lineTo(W/2 + px(6), py(15));
+          ctx.lineTo(W/2, H/2 - py(9));
+          ctx.lineTo(W/2 - px(6), py(15));
+          ctx.closePath();
+        }, P1, S1);
+        // J2: triángulo inferior espejado
+        fillZone(()=>{
+          ctx.moveTo(0, H);
+          ctx.lineTo(W, H);
+          ctx.lineTo(W/2 + px(6), H - py(15));
+          ctx.lineTo(W/2, H/2 + py(9));
+          ctx.lineTo(W/2 - px(6), H - py(15));
+          ctx.closePath();
+        }, P2, S2);
+
       } else if (zoneKey==="vanguard_strike") {
-        fillZone(()=>{ctx.moveTo(0,0);ctx.lineTo(px(BW-12),0);ctx.lineTo(0,py(BH-12));ctx.closePath();}, P1, S1);
-        fillZone(()=>{ctx.moveTo(W,H);ctx.lineTo(px(12),H);ctx.lineTo(W,py(12));ctx.closePath();}, P2, S2);
+        // Diagonal asimétrica: 21.5" en eje largo, 14.5" en eje corto, 12" exclusión centro
+        // J1: esquina inf-izq
+        fillZone(()=>{
+          ctx.moveTo(0, H);                          // esquina inf-izq
+          ctx.lineTo(px(BW - 21.5), H);              // borde inf hasta 21.5" del borde der
+          ctx.lineTo(W/2 + px(12), H/2);             // centro +12" en X
+          ctx.lineTo(W/2, H/2 + py(12));             // centro +12" en Y
+          ctx.lineTo(0, py(BH - 14.5));              // borde izq hasta 14.5" del borde inf
+          ctx.closePath();
+        }, P1, S1);
+        // J2: esquina sup-der espejada
+        fillZone(()=>{
+          ctx.moveTo(W, 0);                          // esquina sup-der
+          ctx.lineTo(px(21.5), 0);                   // borde sup hasta 21.5" del borde izq
+          ctx.lineTo(W/2 - px(12), H/2);             // centro -12" en X
+          ctx.lineTo(W/2, H/2 - py(12));             // centro -12" en Y
+          ctx.lineTo(W, py(14.5));                   // borde der hasta 14.5" del borde sup
+          ctx.closePath();
+        }, P2, S2);
       }
+
+      // Etiquetas
       ctx.save(); ctx.font="bold 11px 'Rajdhani',monospace";
       const lp = {
-        dawn_of_war:        [[W/2,py(6),S1,"J1"],[W/2,H-py(6),S2,"J2"]],
-        hammer_and_anvil:   [[px(12),H/2,S1,"J1"],[W-px(12),H/2,S2,"J2"]],
-        spearhead_assault:  [[px(8),H-py(8),S1,"J1"],[W-px(8),py(8),S2,"J2"]],
-        search_and_destroy: [[px(8),H-py(8),S1,"J1"],[W-px(8),py(8),S2,"J2"]],
-        front_line_assault: [[W/2,py(7),S1,"J1"],[W/2,H-py(7),S2,"J2"]],
-        vanguard_strike:    [[px(8),py(8),S1,"J1"],[W-px(8),H-py(8),S2,"J2"]],
+        dawn_of_war:        [[W/2, py(6), S1,"J1"],[W/2, H-py(6), S2,"J2"]],
+        hammer_and_anvil:   [[px(12), H/2, S1,"J1"],[W-px(12), H/2, S2,"J2"]],
+        spearhead_assault:  [[px(5), H/2, S1,"J1"],[W-px(5), H/2, S2,"J2"]],
+        search_and_destroy: [[W/2, py(7), S1,"J1"],[W/2, H-py(7), S2,"J2"]],
+        front_line_assault: [[W/2, py(6), S1,"J1"],[W/2, H-py(6), S2,"J2"]],
+        vanguard_strike:    [[px(8), H-py(8), S1,"J1"],[W-px(8), py(8), S2,"J2"]],
       };
       (lp[zoneKey]||[]).forEach(([lx,ly,col,txt])=>{
         ctx.fillStyle=col; ctx.textAlign="center"; ctx.textBaseline="middle";
