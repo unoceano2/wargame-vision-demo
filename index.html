@@ -1,398 +1,883 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Wargame Vision System</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #050d1a; font-family: 'Rajdhani', monospace; }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Wargame Vision System</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#050d1a;color:#c8dff5;font-family:'Rajdhani',monospace;overflow-x:hidden;}
+::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:#050d1a;}::-webkit-scrollbar-thumb{background:#0e2a4a;}
+.rb{border:1px solid #0e2a4a;background:transparent;color:#3a5a7a;cursor:pointer;font-family:'Rajdhani',monospace;font-weight:600;letter-spacing:1px;transition:all .2s;}
+.rb:hover{border-color:#f97316;color:#f97316;}
+.rb.on{border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.18);}
+.rb.bon{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,0.12);}
+.rb.gon{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,0.12);}
+.rb.ron{border-color:#f43f5e;color:#f43f5e;background:rgba(244,63,94,0.12);}
+.panel{background:#070f20;border:1px solid #0e2a4a;position:relative;overflow:hidden;}
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#f97316,transparent);opacity:.4;}
+.tag{font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:2px;}
+.pulse{animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.spin{animation:spin 1s linear infinite;}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.fade-in{animation:fadeIn .25s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.unit-row{border:1px solid #0e2a4a;border-radius:2px;padding:7px 10px;margin-bottom:4px;transition:all .2s;background:#050d1a;cursor:pointer;}
+.unit-row:hover{border-color:#1e3a5a;}
+.unit-row.deployed{border-color:#22c55e44;background:rgba(34,197,94,0.04);}
+.unit-row.eliminated{border-color:#f43f5e22;background:rgba(244,63,94,0.04);opacity:0.5;}
+.unit-row.selected-unit{border-color:#f97316;background:rgba(249,115,22,0.06);}
+.aura-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:2px;font-size:9px;font-weight:700;letter-spacing:1px;margin:2px;}
+.drop-zone{border:2px dashed #0e2a4a;border-radius:4px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;}
+.drop-zone:hover,.drop-zone.drag-over{border-color:#38bdf8;background:rgba(56,189,248,0.05);}
+input[type=file]{display:none;}
+</style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState, useRef, useEffect } = React;
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
-    const STANDARD_INCHES = [3,6,9,12,18,24];
-    const SHOOT_INCHES    = [6,12,18,24,30,36,48];
-    const BASES = {
-      round:       {label:"Redonda",    sizes:[[25],[28.5],[32],[40],[50],[60],[65],[80],[100],[130],[160]]},
-      oval:        {label:"Ovalada",    sizes:[[60,35],[75,42],[90,52],[105,70],[120,92],[170,105]]},
-    };
-    const sizeLabel = s => s.length===1?`${s[0]}mm`:`${s[0]}×${s[1]}mm`;
-    const FACTION_COLORS = {"Adeptus Astartes":"#f97316","Orks":"#22c55e","Necrons":"#06b6d4","Chaos":"#a855f7","Tau":"#f59e0b"};
-    const PLAYER_COLORS  = ["#f97316","#38bdf8","#22c55e","#a855f7","#f43f5e","#fbbf24"];
-    const AURA_TYPES = {
-      move:      {label:"M",  full:"MOVIMIENTO", color:"#22c55e"},
-      charge:    {label:"C",  full:"CARGA",      color:"#a855f7"},
-      influence: {label:"I",  full:"INFLUENCIA", color:"#f97316"},
-      shoot:     {label:"AD", full:"ARMA DIST.", color:"#38bdf8"},
-    };
-    const GAME_MODES = {
-      wh40k: {
-        strike_force:  {label:"Strike Force (2000pts)", w:44,h:60},
-        incursion:     {label:"Incursion (1000pts)",    w:44,h:60},
-        combat_patrol: {label:"Combat Patrol (500pts)", w:44,h:30},
-        onslaught:     {label:"Onslaught (3000pts)",    w:44,h:90},
-      },
-      age_of_sigmar: {
-        standard:  {label:"Estándar (2000pts)",   w:44,h:60},
-        spearhead: {label:"Spearhead / Vanguard", w:22,h:30},
-      },
-      kill_team: {
-        standard:   {label:"Estándar",   w:22,h:30},
-        gallowdark: {label:"Gallowdark", w:24,h:28},
-      },
-      warcry:        {standard:{label:"Estándar",      w:22,h:30}},
-      the_old_world: {standard:{label:"Estándar 44x60",w:44,h:60}, large:{label:"Grande 48x72",w:48,h:72}},
-      necromunda:    {standard:{label:"Estándar 48x48",w:48,h:48}},
-    };
-    const DEFAULT_UNITS = [
-      {id:1,name:"Space Marine",  faction:"Adeptus Astartes",baseType:"round",baseSize:[32], move:6, charge:12,influence:6, shoot:24,auras:{move:true,charge:true,influence:true,shoot:true}},
-      {id:2,name:"SM Captain",    faction:"Adeptus Astartes",baseType:"round",baseSize:[40], move:6, charge:12,influence:12,shoot:24,auras:{move:true,charge:true,influence:true,shoot:true}},
-      {id:3,name:"Outrider",      faction:"Adeptus Astartes",baseType:"oval", baseSize:[90,52],move:12,charge:12,influence:0,shoot:24,auras:{move:true,charge:true,influence:false,shoot:true}},
-      {id:4,name:"Ork Boy",       faction:"Orks",            baseType:"round",baseSize:[32], move:5, charge:12,influence:3, shoot:12,auras:{move:true,charge:true,influence:true,shoot:true}},
-      {id:5,name:"Necron Warrior",faction:"Necrons",         baseType:"round",baseSize:[32], move:5, charge:12,influence:6, shoot:24,auras:{move:true,charge:true,influence:true,shoot:true}},
-    ];
-    const DEMO_MINIS = [
-      {id:"m1",unitId:1,x:0.20,y:0.25,playerId:null},
-      {id:"m2",unitId:3,x:0.30,y:0.55,playerId:null},
-      {id:"m3",unitId:4,x:0.75,y:0.30,playerId:null},
-      {id:"m4",unitId:4,x:0.82,y:0.55,playerId:null},
-      {id:"m5",unitId:5,x:0.60,y:0.70,playerId:null},
-      {id:"m6",unitId:2,x:0.50,y:0.18,playerId:null},
-    ];
-    const TABS = ["TABLERO","JUGADORES","UNIDADES","CONFIG"];
-    const C = {bg:"#050d1a",panel:"#070f20",border:"#0e2a4a",accent:"#f97316",blue:"#38bdf8",text:"#c8dff5",muted:"#3a5a7a",glow:"rgba(249,115,22,0.18)",glowB:"rgba(56,189,248,0.12)"};
-    const h2p = h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
-    const h2rgb= h=>h2p(h).join(',');
+const C = {bg:"#050d1a",panel:"#070f20",border:"#0e2a4a",accent:"#f97316",blue:"#38bdf8",text:"#c8dff5",muted:"#3a5a7a",green:"#22c55e",purple:"#a855f7",red:"#f43f5e",yellow:"#fbbf24"};
+const PLAYER_COLORS = ["#f97316","#38bdf8","#22c55e","#a855f7","#f43f5e","#fbbf24"];
+const FACTION_COLORS = {"Adeptus Astartes":"#38bdf8","Aeldari":"#22c55e","Tiránidos":"#a855f7","Orks":"#84cc16","Necrons":"#06b6d4","Chaos":"#a855f7","T'au":"#f59e0b","Drukhari":"#f43f5e"};
+const h2p = h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const h2rgb = h=>h2p(h).join(',');
 
-    function drawAura(ctx,cx,cy,unit,W,H,pColor,selected,t){
-      const {baseType,baseSize,move,influence,shoot,charge,auras}=unit;
-      const TW=44*25.4,TH=60*25.4;
-      const mmX=w=>w*W/TW, mmY=h=>h*H/TH;
-      const sc=i=>i*25.4*((mmX(1)+mmY(1))/2);
-      const buildPath=(ctx,ex)=>{
-        ctx.beginPath();
-        if(baseType==="round") ctx.arc(0,0,mmX(baseSize[0]/2)+ex,0,Math.PI*2);
-        else if(baseType==="oval") ctx.ellipse(0,0,mmX(baseSize[0]/2)+ex,mmY(baseSize[1]/2)+ex,0,0,Math.PI*2);
-        else{
-          const hw=mmX(baseSize[0]/2)+ex, hh=mmY((baseSize[1]||baseSize[0])/2)+ex, r=Math.max(ex,4);
-          ctx.moveTo(-hw+r,-hh);ctx.lineTo(hw-r,-hh);ctx.arcTo(hw,-hh,hw,-hh+r,r);
-          ctx.lineTo(hw,hh-r);ctx.arcTo(hw,hh,hw-r,hh,r);
-          ctx.lineTo(-hw+r,hh);ctx.arcTo(-hw,hh,-hw,hh-r,r);
-          ctx.lineTo(-hw,-hh+r);ctx.arcTo(-hw,-hh,-hw+r,-hh,r);ctx.closePath();
-        }
-      };
-      const layer=(ex,color,dash,lw,pattern)=>{
-        const[r,g,b]=h2p(color);
-        ctx.save();ctx.translate(cx,cy);
-        buildPath(ctx,ex);
-        ctx.save();ctx.clip();ctx.globalAlpha=0.15;
-        if(pattern==='lines'){
-          ctx.strokeStyle=color;ctx.lineWidth=0.8;ctx.setLineDash([4,8]);ctx.lineDashOffset=-(t*15)%12;
-          for(let dy=-ex-8;dy<ex+8;dy+=9){ctx.beginPath();ctx.moveTo(-ex-8,dy);ctx.lineTo(ex+8,dy);ctx.stroke();}
-          ctx.setLineDash([]);
-        } else if(pattern==='dots'){
-          for(let dx=-ex-6;dx<ex+6;dx+=10) for(let dy=-ex-6;dy<ex+6;dy+=10){ctx.beginPath();ctx.arc(dx,dy,1.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();}
-        } else if(pattern==='grid'){
-          ctx.strokeStyle=color;ctx.lineWidth=0.6;
-          for(let dx=-ex-6;dx<ex+6;dx+=14){ctx.beginPath();ctx.moveTo(dx,-ex-6);ctx.lineTo(dx,ex+6);ctx.stroke();}
-          for(let dy=-ex-6;dy<ex+6;dy+=14){ctx.beginPath();ctx.moveTo(-ex-6,dy);ctx.lineTo(ex+6,dy);ctx.stroke();}
-        } else if(pattern==='hex'){
-          ctx.strokeStyle=color;ctx.lineWidth=0.8;
-          for(let i=0;i<12;i++){const a=(i/12)*Math.PI*2+t*0.3;ctx.beginPath();ctx.moveTo(ex*.4*Math.cos(a),ex*.4*Math.sin(a));ctx.lineTo(ex*.85*Math.cos(a),ex*.85*Math.sin(a));ctx.stroke();}
-        }
-        ctx.globalAlpha=1;ctx.restore();
-        buildPath(ctx,ex);ctx.setLineDash(dash);ctx.strokeStyle=color;ctx.lineWidth=selected?lw+1:lw;
-        ctx.shadowColor=color;ctx.shadowBlur=selected?16:7;ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.restore();
-      };
-      if(auras?.shoot   &&shoot>0)     layer(sc(shoot),   '#38bdf8',[3,5],1.2,'grid');
-      if(auras?.move    &&move>0)      layer(sc(move),    '#22c55e',[],   1.6,'lines');
-      if(auras?.influence&&influence>0) layer(sc(influence),'#f97316',[],  1.8,'dots');
-      if(auras?.charge  &&charge>0)    layer(sc(charge),  '#a855f7',[6,4],1.3,'hex');
-      ctx.save();ctx.translate(cx,cy);buildPath(ctx,0);
-      ctx.strokeStyle=`rgba(${h2rgb(pColor)},.5)`;ctx.lineWidth=0.8;ctx.setLineDash([3,2]);ctx.stroke();ctx.setLineDash([]);ctx.restore();
-    }
+const GAME_SYSTEMS = {
+  wh40k:{label:"Warhammer 40,000",short:"WH40K",color:"#38bdf8",
+    modes:{
+      combat_patrol:{label:"Combat Patrol",w:44,h:30,maxRounds:5},
+      incursion:{label:"Incursion (1000pts)",w:44,h:60,maxRounds:5},
+      strike_force:{label:"Strike Force (2000pts)",w:44,h:60,maxRounds:5},
+      onslaught:{label:"Onslaught (3000pts)",w:44,h:90,maxRounds:5},
+    }},
+  kill_team:{label:"Kill Team",short:"KT",color:"#f97316",
+    modes:{
+      standard:{label:"Estándar",w:22,h:30,maxRounds:4},
+      gallowdark:{label:"Gallowdark",w:24,h:28,maxRounds:4},
+    }},
+};
 
-    function App(){
-      const [tab,setTab]         = useState("TABLERO");
-      const [units,setUnits]     = useState(DEFAULT_UNITS);
-      const [players,setPlayers] = useState([{id:1,name:"JUGADOR I",color:PLAYER_COLORS[0]},{id:2,name:"JUGADOR II",color:PLAYER_COLORS[1]}]);
-      const [minis,setMinis]     = useState(DEMO_MINIS);
-      const [selMini,setSelMini] = useState(null);
-      const [assignMenu,setAssignMenu] = useState(null);
-      const [activeAuras,setActiveAuras] = useState({move:true,influence:true,shoot:true,charge:true});
-      const [activeGame,setActiveGame]   = useState("wh40k");
-      const [activeMode,setActiveMode]   = useState("strike_force");
-      const [editUnit,setEditUnit]       = useState(null);
-      const [showLegend,setShowLegend]   = useState(false);
-      const [tick,setTick] = useState(0);
-      const canvasRef = useRef(null);
+const DEPLOY_ZONES = {
+  dawn_of_war:{label:"Dawn of War",desc:'12" borde largo'},
+  hammer_and_anvil:{label:"Hammer & Anvil",desc:'24" borde largo'},
+  spearhead_assault:{label:"Spearhead Assault",desc:'Triángulos borde corto'},
+  search_and_destroy:{label:"Search & Destroy",desc:'Diagonal + exclusión 9"'},
+  front_line_assault:{label:"Front-Line Assault",desc:'Triángulos borde largo'},
+  vanguard_strike:{label:"Vanguard Strike",desc:'Diagonal asimétrica'},
+};
 
-      useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),80);return()=>clearInterval(i);},[]);
+const EMBEDDED_PATROLS = [
+  {id:"space_marines_octavius",system:"wh40k",game_mode:"combat_patrol",faction:"Space Marines",faction_keyword:"Adeptus Astartes",patrol_name:"Fuerza de Choque Octavius",
+   faction_ability:{name:"Juramento y Órdenes",description:"Al inicio de tu fase de mando, elige una unidad enemiga. Puedes repetir tiradas para impactar contra ese blanco."},
+   enhancements:{default:{name:"Campeón Duelista",description:"Las armas de combate del Capitán tienen [PRECISIÓN] e [IMPACTOS LETALES]."},optional:{name:"Determinación Jurada",description:"+1 OC a miniaturas en la unidad del Capitán."}},
+   secondary_objectives:{default:{name:"Ira del Emperador",description:"2PV al final de cada fase si el Capitán eliminó miniaturas."},optional:{name:"Tácticas de Choque",description:"5PV si controlas objetivos que el oponente controlaba al inicio del turno."}},
+   stratagems:[{name:"Resistencia Genética",cost_cp:1,when:"Fase disparo/combate rival",effect:"Resta 1 a herir si F > R de tu unidad."},{name:"Instintos de Veterano",cost_cp:1,when:"Fase combate",effect:"Repite tiradas para herir de 1; si el blanco es Monstruo/Vehículo repite la tirada."},{name:"Fuerza Abrumadora",cost_cp:1,when:"Final fase de mando",effect:"Un marcador de objetivo en alcance queda asegurado."}],
+   units:[
+    {id:"capitan_octavius",name:"Capitán Octavius",role:"warlord",count:1,keywords:["Infantería","Personaje","Imperium","Exterminador","Capitán"],stats:{M:'5"',T:5,SV:"2+",W:6,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:40,base_type:"round",
+     ranged_weapons:[{name:"Bólter tormenta",keywords:["FUEGO RÁPIDO 2"],range_inches:24,attacks:2,skill:"2+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Arma reliquia",keywords:[],range_inches:0,attacks:6,skill:"2+",strength:5,AP:-2,damage:2}],
+     abilities:[{name:"Líder",type:"core",description:"Se anexa a: Escuadra de Exterminadores."},{name:"Despliegue rápido",type:"core"},{name:"Juramento y Órdenes",type:"faction"},{name:"Valor imparable",type:"special",description:"Repite tiradas de carga de la unidad.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"Repite carga",color:"#a855f7"}}]},
+    {id:"bibliotecario_tantus",name:"Bibliotecario Tantus",role:"support",count:1,keywords:["Infantería","Personaje","Psíquico","Imperium","Exterminador"],stats:{M:'5"',T:5,SV:"2+",W:5,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:40,base_type:"round",
+     ranged_weapons:[{name:"Castigo – fuego brujo",keywords:["PSÍQUICA"],range_inches:24,attacks:"1D6",skill:"3+",strength:5,AP:-1,damage:"1D3"},{name:"Castigo – concentrado",keywords:["HERIDAS DEVASTADORAS","PSÍQUICA"],range_inches:24,attacks:"1D6",skill:"3+",strength:6,AP:-2,damage:"1D3"},{name:"Bólter tormenta",keywords:["FUEGO RÁPIDO 2"],range_inches:24,attacks:2,skill:"3+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Arma de psicofuerza",keywords:["PSÍQUICA"],range_inches:0,attacks:4,skill:"3+",strength:6,AP:-1,damage:"1D3"}],
+     abilities:[{name:"Líder",type:"core",description:"Se anexa a: Escuadra de Exterminadores."},{name:"Despliegue rápido",type:"core"},{name:"Juramento y Órdenes",type:"faction"},{name:"Velo temporal",type:"special",description:"Mientras lidera una unidad, esa unidad tiene [GOLPES SOSTENIDOS 1].",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"Golpes Sostenidos 1",color:"#38bdf8"}}]},
+    {id:"escuadra_exterminadores",name:"Escuadra de Exterminadores",role:"battleline",count:5,keywords:["Infantería","Imperium","Exterminador"],stats:{M:'5"',T:5,SV:"2+",W:3,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:40,base_type:"round",
+     ranged_weapons:[{name:"Cañón de asalto",keywords:["HERIDAS DEVASTADORAS"],range_inches:24,attacks:6,skill:"3+",strength:6,AP:0,damage:1},{name:"Bólter tormenta",keywords:["FUEGO RÁPIDO 2"],range_inches:24,attacks:2,skill:"3+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Puño de energía",keywords:[],range_inches:0,attacks:3,skill:"3+",strength:8,AP:-2,damage:2},{name:"Arma de energía",keywords:[],range_inches:0,attacks:4,skill:"3+",strength:5,AP:-2,damage:1}],
+     abilities:[{name:"Despliegue rápido",type:"core"},{name:"Juramento y Órdenes",type:"faction"},{name:"Furia de la Primera",type:"special",description:"+1 a impactar contra el blanco de Juramento y Órdenes.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"+1 impactar vs Juramento",color:"#fbbf24"}}]},
+    {id:"escuadra_infernus",name:"Escuadra Infernus",role:"troops",count:5,keywords:["Infantería","Imperium","Tacticus"],stats:{M:'6"',T:4,SV:"3+",W:2,LD:"6+",OC:1},base_size_mm:32,base_type:"round",
+     ranged_weapons:[{name:"Pistola bólter",keywords:["PISTOLA"],range_inches:12,attacks:1,skill:"3+",strength:4,AP:0,damage:1},{name:"Pirobláster",keywords:["IGNORA COBERTURA","RÁFAGA"],range_inches:12,attacks:"1D6",skill:"N/A",strength:5,AP:0,damage:1}],
+     melee_weapons:[{name:"Arma de combate",keywords:[],range_inches:0,attacks:3,skill:"3+",strength:4,AP:0,damage:1}],
+     abilities:[{name:"Juramento y Órdenes",type:"faction"}]}
+   ]},
+  {id:"aeldari_fatebreakers",system:"wh40k",game_mode:"combat_patrol",faction:"Aeldari",faction_keyword:"Aeldari",patrol_name:"The Fatebreakers",
+   faction_ability:{name:"Strands of Fate",description:"Al inicio de la batalla tira 12D6 (puedes repetir todos gastando 1 dado). Los dados resultantes son tus Fate Dice."},
+   enhancements:{default:{name:"Foresight",description:"1/turno: usa Fire Overwatch con la unidad del Farseer por 0CP."},optional:{name:"Eldritch Might",description:"En cada ataque psíquico repite tirada de impactar, herir y daño de 1."}},
+   secondary_objectives:{default:{name:"Ineffable Agenda",description:"3PV al final de tu turno si controlas objetivos fuera de tu zona que no tenías al inicio."},optional:{name:"A Greater Destiny",description:"10PV al final si tienes unidades en la zona de despliegue rival."}},
+   stratagems:[{name:"Whip-Fast Reactions",cost_cp:1,when:"Fase disparo/combate rival",effect:"Resta 1 a impactar contra tu unidad Aeldari."},{name:"Storm of Shots",cost_cp:1,when:"Tu fase de disparo",effect:"+1 a impactar para hasta 2 unidades Montadas o 1 Infantería."},{name:"Zephyr-Swift",cost_cp:1,when:"Final fase disparo",effect:"Hasta 2 unidades Montadas o 1 Infantería pueden moverse 6\" extra."}],
+   units:[
+    {id:"farseer_iraneth",name:"Farseer Iraneth",role:"warlord",count:1,keywords:["Personaje","Infantería","Psíquico","Farseer"],stats:{M:'7"',T:3,SV:"6+",W:4,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:32,base_type:"round",
+     ranged_weapons:[{name:"Eldritch Storm",keywords:["BLAST","PSÍQUICA"],range_inches:24,attacks:"D6",skill:"3+",strength:6,AP:-2,damage:"D3"},{name:"Shuriken pistol",keywords:["ASSAULT","PISTOLA"],range_inches:12,attacks:1,skill:"2+",strength:4,AP:-1,damage:1},{name:"Singing spear",keywords:["ASSAULT","PSÍQUICA"],range_inches:12,attacks:1,skill:"2+",strength:9,AP:0,damage:3}],
+     melee_weapons:[{name:"Singing spear",keywords:["PSÍQUICA"],range_inches:0,attacks:2,skill:"2+",strength:3,AP:0,damage:3}],
+     abilities:[{name:"Líder",type:"core",description:"Se anexa a: Guardian Defenders."},{name:"Strands of Fate",type:"faction"},{name:"Fortune",type:"special",description:"Fase de mando: tira 1D6, con 2+ elige unidad Aeldari amiga a 12\". Resta 1 a herir contra esa unidad.",aura:{type:"buff",radius_inches:12,affects:"friendly_aeldari",display_text:"-1 herir (Fortune)",color:"#22c55e"}}]},
+    {id:"guardian_defenders",name:"Guardian Defenders",role:"battleline",count:11,keywords:["Infantería","Línea de Batalla","Guardians"],stats:{M:'7"',T:3,SV:"4+",W:1,LD:"6+",OC:2},base_size_mm:28,base_type:"round",
+     ranged_weapons:[{name:"Shuriken catapult",keywords:["ASSAULT"],range_inches:18,attacks:2,skill:"3+",strength:4,AP:-1,damage:1},{name:"Starcannon (HWP)",keywords:[],range_inches:36,attacks:2,skill:"3+",strength:8,AP:-3,damage:2}],
+     melee_weapons:[{name:"Arma de combate",keywords:[],range_inches:0,attacks:1,skill:"3+",strength:3,AP:0,damage:1}],
+     abilities:[{name:"Strands of Fate",type:"faction"},{name:"Defenders of Fate",type:"special",description:"Al final de tu fase de mando, por cada objetivo controlado con esta unidad en alcance, añade 1D6 a tu reserva de Fate Dice.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"+Fate Dice",color:"#fbbf24"}},{name:"Crewed Platform",type:"special",description:"Si el último Guardian Defender es destruido, la HWP también lo es."}]},
+    {id:"windriders",name:"Windriders",role:"fast_attack",count:6,keywords:["Montado","Volar","Windriders"],stats:{M:'14"',T:4,SV:"3+",W:2,LD:"6+",OC:2},base_size_mm:32,base_type:"oval",
+     patrol_squads:"Puede dividirse en 2 unidades de 3 (cada una con 1 scatter laser).",
+     ranged_weapons:[{name:"Scatter laser",keywords:[],range_inches:36,attacks:6,skill:"3+",strength:5,AP:0,damage:1},{name:"Twin shuriken catapult",keywords:["ASSAULT","TWIN-LINKED"],range_inches:18,attacks:2,skill:"3+",strength:4,AP:-1,damage:1}],
+     melee_weapons:[{name:"Arma de combate",keywords:[],range_inches:0,attacks:3,skill:"3+",strength:3,AP:0,damage:1}],
+     abilities:[{name:"Strands of Fate",type:"faction"},{name:"Swift Demise",type:"special",description:"Al atacar al objetivo más cercano: repite impactar de 1. Si está en alcance de un objetivo del oponente, repite la tirada completa.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"Repite impactar vs objetivo rival",color:"#22c55e"}}]},
+    {id:"wraithlord_aeldari",name:"Wraithlord",role:"heavy_support",count:1,keywords:["Monstruo","Walker","Wraith Construct"],stats:{M:'8"',T:11,SV:"2+",W:10,LD:"6+",OC:3},base_size_mm:60,base_type:"round",
+     ranged_weapons:[{name:"Bright lance",keywords:[],range_inches:36,attacks:1,skill:"4+",strength:12,AP:-3,damage:"D6+2"},{name:"Shuriken catapult x2",keywords:["ASSAULT"],range_inches:18,attacks:2,skill:"4+",strength:4,AP:-1,damage:1}],
+     melee_weapons:[{name:"Ghostglaive – golpe",keywords:[],range_inches:0,attacks:4,skill:"4+",strength:10,AP:-3,damage:"D6+1"},{name:"Ghostglaive – barrido",keywords:[],range_inches:0,attacks:8,skill:"4+",strength:7,AP:-2,damage:2}],
+     abilities:[{name:"Final Violento 1",type:"core",description:"Al ser destruido, con un 6 cada unidad a 6\" sufre 1 herida mortal."}]}
+   ]},
+  {id:"raven_guard_kevarax",system:"wh40k",game_mode:"combat_patrol",faction:"Raven Guard",faction_keyword:"Adeptus Astartes",patrol_name:"Shadow Claw Kevarax",
+   faction_ability:{name:"Oath of Moment",description:"Al inicio de tu fase de mando, elige una unidad enemiga. Puedes repetir tiradas para impactar contra ese blanco."},
+   enhancements:{default:{name:"Deadly Duellist",description:"Las armas de combate del Capitán tienen [LETHAL HITS]."},optional:{name:"Area Denial",description:"Al final de tu fase de mando, si el Capitán está en alcance de un objetivo, ese objetivo permanece bajo tu control aunque no tengas miniaturas en alcance."}},
+   secondary_objectives:{default:{name:"Concentrated Wrath",description:"2PV cada vez que destruyas una unidad enemiga. 3PV si era tu Oath of Moment target."},optional:{name:"Clandestine Infiltration",description:"10PV al final si controlas el objetivo más cercano al borde rival."}},
+   stratagems:[{name:"Stranglehold",cost_cp:1,when:"Fase de mando",effect:"+1 OC a los modelos de una unidad Adeptus Astartes."},{name:"From the Shadows",cost_cp:1,when:"Fase disparo/combate",effect:"+1 PA a las armas + [ANTI-MONSTER 4+] y [ANTI-VEHICLE 4+] para una unidad que no haya actuado."},{name:"Force Their Hand",cost_cp:1,when:"Fase movimiento rival",effect:"Tu unidad a 9\" puede moverse D6\" (6\" si es Phobos) tras un movimiento enemigo."}],
+   units:[
+    {id:"captain_kevarax",name:"Captain Kevarax",role:"warlord",count:1,keywords:["Infantería","Personaje","Jump Pack","Volar","Imperium","Tacticus","Capitán"],stats:{M:'12"',T:4,SV:"3+",W:5,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:40,base_type:"round",
+     ranged_weapons:[{name:"Heavy bolt pistol",keywords:["PISTOLA"],range_inches:18,attacks:1,skill:"2+",strength:4,AP:-1,damage:1}],
+     melee_weapons:[{name:"Relic weapon",keywords:[],range_inches:0,attacks:6,skill:"2+",strength:5,AP:-2,damage:2}],
+     abilities:[{name:"Líder",type:"core",description:"Se anexa a: Assault Intercessors with Jump Packs."},{name:"Deep Strike",type:"core"},{name:"Oath of Moment",type:"faction"},{name:"Angel's Wrath",type:"special",description:"Tras una carga, +1 Fuerza a las armas de combate de la unidad hasta el final del turno.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"+1 F combate tras carga",color:"#f97316"}}]},
+    {id:"assault_intercessors_jp",name:"Assault Intercessors JP",role:"troops",count:5,keywords:["Infantería","Jump Pack","Volar","Imperium","Tacticus"],stats:{M:'12"',T:4,SV:"3+",W:2,LD:"6+",OC:1},base_size_mm:32,base_type:"round",
+     ranged_weapons:[{name:"Heavy bolt pistol",keywords:["PISTOLA"],range_inches:12,attacks:1,skill:"3+",strength:4,AP:-1,damage:1}],
+     melee_weapons:[{name:"Astartes chainsword",keywords:[],range_inches:0,attacks:4,skill:"3+",strength:4,AP:-1,damage:1},{name:"Power weapon (Sgto)",keywords:[],range_inches:0,attacks:4,skill:"3+",strength:5,AP:-2,damage:1}],
+     abilities:[{name:"Deep Strike",type:"core"},{name:"Oath of Moment",type:"faction"},{name:"Hammer of Wrath",type:"special",description:"Tras una carga, tira 1D6 por modelo en zona de amenaza: con 4+ la unidad enemiga sufre 1 herida mortal.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"Heridas mortales tras carga",color:"#f43f5e"}}]},
+    {id:"infiltrator_squad",name:"Infiltrator Squad",role:"troops",count:10,keywords:["Infantería","Smoke","Imperium","Phobos"],stats:{M:'6"',T:4,SV:"3+",W:2,LD:"6+",OC:1},base_size_mm:32,base_type:"round",
+     patrol_squads:"Puede dividirse en 2 unidades de 5.",
+     ranged_weapons:[{name:"Bolt pistol",keywords:["PISTOLA"],range_inches:12,attacks:1,skill:"3+",strength:4,AP:0,damage:1},{name:"Marksman bolt carbine",keywords:["HEAVY"],range_inches:24,attacks:2,skill:"3+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Arma de combate",keywords:[],range_inches:0,attacks:3,skill:"3+",strength:4,AP:0,damage:1}],
+     abilities:[{name:"Infiltrators",type:"core"},{name:"Oath of Moment",type:"faction"},{name:"Omni-scramblers",type:"special",description:"Unidades enemigas de Reservas no pueden desplegarse a 12\" o menos.",aura:{type:"denial",radius_inches:12,affects:"enemy",display_text:"Bloqueo reservas 12\"",color:"#f43f5e"}}]},
+    {id:"invictor_tactical_warsuit",name:"Invictor Tactical Warsuit",role:"heavy_support",count:1,keywords:["Vehículo","Walker","Imperium","Phobos"],stats:{M:'8"',T:8,SV:"3+",W:12,LD:"6+",OC:4},base_size_mm:60,base_type:"round",
+     damaged_profile:{threshold:"1-4 heridas",effect:"Resta 1 a impactar."},
+     ranged_weapons:[{name:"Twin ironhail autocannon",keywords:["TWIN-LINKED"],range_inches:48,attacks:3,skill:"3+",strength:9,AP:-1,damage:3},{name:"Heavy bolter",keywords:["SUSTAINED HITS 1"],range_inches:36,attacks:3,skill:"3+",strength:5,AP:-1,damage:2},{name:"Fragstorm launcher",keywords:["BLAST"],range_inches:18,attacks:"D6",skill:"3+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Invictor fist",keywords:[],range_inches:0,attacks:5,skill:"3+",strength:14,AP:-2,damage:3}],
+     abilities:[{name:"Final Violento D3",type:"core"},{name:"Scouts 8\"",type:"core"},{name:"Oath of Moment",type:"faction"}]}
+   ]},
+  {id:"tyranids_vardenghast",system:"wh40k",game_mode:"combat_patrol",faction:"Tiránidos",faction_keyword:"Tiránidos",patrol_name:"Enjambre Vardenghast",
+   faction_ability:{name:"Sinapsis + Sombra en la Disformidad",description:"Sinapsis: unidades a 6\" de una miniatura Sinapsis hacen chequeos de acobardamiento con 3D6. Sombra: 1/batalla, todas las unidades enemigas hacen un chequeo de acobardamiento."},
+   enhancements:{default:{name:"Velo Psicoestático",description:"Terror: Agente solitario + salvación inv. 4+ + resta 1 a impactar en combate."},optional:{name:"Secreción Súbita",description:"1/turno: cuando una unidad Tiránidos amiga a 6\" dispare o combata, mejora en 1 el FP de sus armas."}},
+   secondary_objectives:{default:{name:"Xenomorfo Alfa",description:"4PV al final de cada fase si el Terror eliminó miniaturas."},optional:{name:"Marea Quitinosa",description:"5PV al final de tu turno si controlas objetivos a 6\" o menos de la zona rival."}},
+   stratagems:[{name:"Hiperreactivo",cost_cp:1,when:"Fase disparo/combate rival",effect:"Resta 1 a impactar contra una unidad Infantería Tiránidos."},{name:"Asalto Voraz",cost_cp:1,when:"Fase disparo/combate",effect:"Una unidad que no haya actuado: repite tiradas para impactar contra el blanco más cercano."},{name:"Y más, y muchos más...",cost_cp:1,when:"Paso de refuerzos",effect:"Devuelve 1D6 Termagantes (o crea una nueva unidad de 2D6 si fue eliminada)."}],
+   units:[
+    {id:"terror_vardenghast",name:"Terror de Vardenghast",role:"warlord",count:1,keywords:["Infantería","Personaje","Volar","Gran Devorador","Sinapsis"],stats:{M:'12"',T:5,SV:"4+",W:6,LD:"7+",OC:1},base_size_mm:40,base_type:"round",
+     melee_weapons:[{name:"Garras Primus",keywords:[],range_inches:0,attacks:6,skill:"2+",strength:6,AP:-1,damage:2}],
+     abilities:[{name:"Despliegue Rápido",type:"core"},{name:"Sombra en la Disformidad",type:"faction"},{name:"Sinapsis",type:"faction",aura:{type:"synapse",radius_inches:6,affects:"friendly_tyranids",display_text:"Sinapsis 6\"",color:"#a855f7"}},{name:"Golpe de muerte",type:"special",description:"Si es eliminado en combate antes de combatir, tira 1D6: con 4+ puede combatir antes de retirarse."}]},
+    {id:"psicofago",name:"Psicófago",role:"elite",count:1,keywords:["Monstruo","Gran Devorador","Cosechador","Sinapsis"],stats:{M:'8"',T:9,SV:"3+",W:10,LD:"8+",OC:3},base_size_mm:60,base_type:"round",
+     ranged_weapons:[{name:"Ráfaga psicoclástica",keywords:["IGNORA COBERTURA","RÁFAGA"],range_inches:12,attacks:"1D6",skill:"N/A",strength:6,AP:-1,damage:1}],
+     melee_weapons:[{name:"Espolones y mandíbula tentacular",keywords:["ANTIPSÍQUICO 4+","HERIDAS DEVASTADORAS"],range_inches:0,attacks:"1D6+1",skill:"3+",strength:6,AP:-1,damage:2}],
+     abilities:[{name:"Final Violento 1",type:"core"},{name:"No hay dolor 5+",type:"core",description:"Con 5+, ignora una herida."},{name:"Sinapsis",type:"faction",aura:{type:"synapse",radius_inches:6,affects:"friendly_tyranids",display_text:"Sinapsis 6\"",color:"#a855f7"}},{name:"Frenesí alimenticio",type:"special",description:"+1 impactar vs unidades diezmadas; +1 herir si están por debajo del 50%.",aura:{type:"buff",radius_inches:0,affects:"self",display_text:"+1 impactar vs diezmados",color:"#a855f7"}}]},
+    {id:"termagantes",name:"Termagantes",role:"battleline",count:20,keywords:["Infantería","Línea de Batalla","Gran Devorador","Multitud Interminable"],stats:{M:'6"',T:3,SV:"5+",W:1,LD:"8+",OC:2},base_size_mm:28,base_type:"round",
+     patrol_squads:"Puede dividirse en 2 unidades de 10.",
+     ranged_weapons:[{name:"Perforacarne",keywords:["ASALTO"],range_inches:18,attacks:1,skill:"4+",strength:5,AP:0,damage:1}],
+     melee_weapons:[{name:"Garras quitinosas y dientes",keywords:[],range_inches:0,attacks:1,skill:"4+",strength:3,AP:0,damage:1}],
+     abilities:[{name:"Sinapsis",type:"faction"},{name:"Horrores merodeadores",type:"special",description:"1/turno: si una unidad enemiga termina un movimiento a 9\" o menos, esta unidad puede moverse 1D6\".",aura:{type:"reaction",radius_inches:9,affects:"self",display_text:"Mov. reactivo 9\"",color:"#22c55e"}}]},
+    {id:"espinogantes",name:"Espinogantes",role:"troops",count:5,keywords:["Infantería","Gran Devorador"],stats:{M:'6"',T:4,SV:"4+",W:2,LD:"8+",OC:1},base_size_mm:28,base_type:"round",
+     ranged_weapons:[{name:"Lanzaespinas",keywords:["ÁREA","PESADA"],range_inches:24,attacks:"1D6",skill:"4+",strength:5,AP:0,damage:1}],
+     melee_weapons:[{name:"Garras quitinosas y dientes",keywords:[],range_inches:0,attacks:1,skill:"4+",strength:4,AP:0,damage:1}],
+     abilities:[{name:"Sinapsis",type:"faction"},{name:"Bombardeo trastocador",type:"special",description:"Tras disparar: si una unidad Infantería enemiga fue impactada, queda trastocada (-2M, -2 avanzar/cargar).",aura:{type:"debuff",radius_inches:0,affects:"enemy_hit",display_text:"Trastocado: -2M/-2 carga",color:"#f43f5e"}}]},
+    {id:"saltadores_von_ryan",name:"Saltadores de Von Ryan",role:"fast_attack",count:3,keywords:["Infantería","Gran Devorador","Invasor de Vanguardia"],stats:{M:'10"',T:5,SV:"4+",W:3,LD:"8+",OC:1},invulnerable_save:"6+",base_size_mm:40,base_type:"round",
+     melee_weapons:[{name:"Espolones de Saltador",keywords:[],range_inches:0,attacks:6,skill:"3+",strength:5,AP:-1,damage:1}],
+     abilities:[{name:"Combatir primero",type:"core"},{name:"Infiltradores",type:"core"},{name:"Sigilo",type:"core",description:"-1 a impactar contra esta unidad en ataques a distancia."},{name:"Sinapsis",type:"faction"},{name:"Abalanzarse de un salto",type:"special",description:"Puedes usar Intervención heroica con esta unidad por 0PM (aunque ya la hayas usado esta fase)."}]}
+   ]}
+];
 
-      useEffect(()=>{
-        if(tab!=="TABLERO") return;
-        const canvas=canvasRef.current; if(!canvas) return;
-        const ctx=canvas.getContext("2d");
-        const W=canvas.width,H=canvas.height,t=tick*0.02;
-        ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
-        ctx.strokeStyle="rgba(14,42,74,0.7)";ctx.lineWidth=0.5;
-        for(let x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-        for(let y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-        [[0,0],[W,0],[0,H],[W,H]].forEach(([x,y])=>{
-          const s=16,ox=x===0?1:-1,oy=y===0?1:-1;
-          ctx.strokeStyle=C.accent;ctx.lineWidth=1.5;
-          ctx.beginPath();ctx.moveTo(x+ox*s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+oy*s);ctx.stroke();
-        });
-        minis.forEach(mini=>{
-          const unit=units.find(u=>u.id===mini.unitId);
-          const player=players.find(p=>p.id===mini.playerId);
-          if(!unit) return;
-          const cx=mini.x*W,cy=mini.y*H,color=player?player.color:C.muted;
-          const fu={...unit,auras:{move:unit.auras.move&&activeAuras.move,influence:unit.auras.influence&&activeAuras.influence,shoot:unit.auras.shoot&&activeAuras.shoot,charge:unit.auras.charge&&activeAuras.charge}};
-          drawAura(ctx,cx,cy,fu,W,H,color,selMini===mini.id,t);
-          ctx.save();ctx.translate(cx,cy);
-          ctx.shadowColor=color;ctx.shadowBlur=14;
-          ctx.beginPath();ctx.arc(0,0,9,0,Math.PI*2);
-          const[r,g,b]=h2p(color);ctx.fillStyle=`rgba(${r},${g},${b},0.2)`;ctx.fill();
-          ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();ctx.shadowBlur=0;
-          ctx.fillStyle=color;ctx.font="bold 9px 'Rajdhani',monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(unit.name[0],0,0);ctx.restore();
-          if(!player){ctx.beginPath();ctx.arc(cx+10,cy-10,5,0,Math.PI*2);ctx.fillStyle=C.accent;ctx.shadowColor=C.accent;ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;ctx.fillStyle=C.bg;ctx.font="bold 7px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",cx+10,cy-10);}
-        });
-      },[tab,minis,units,players,selMini,tick,activeAuras]);
+// ─── DIBUJO ──────────────────────────────────────────────────────────────────
+function drawDeploymentZone(ctx,W,H,BW,BH,zoneKey){
+  const px=v=>v*W/BW,py=v=>v*H/BH,P1="#f97316",P2="#38bdf8";
+  const fillZ=(path,fill,stroke)=>{ctx.save();ctx.beginPath();path();ctx.fillStyle=fill+"33";ctx.fill();ctx.strokeStyle=stroke;ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.stroke();ctx.setLineDash([]);ctx.restore();};
+  if(zoneKey==="dawn_of_war"){fillZ(()=>ctx.rect(0,0,W,py(12)),P1,P1);fillZ(()=>ctx.rect(0,H-py(12),W,py(12)),P2,P2);}
+  else if(zoneKey==="hammer_and_anvil"){fillZ(()=>ctx.rect(0,0,W,py(24)),P1,P1);fillZ(()=>ctx.rect(0,H-py(24),W,py(24)),P2,P2);}
+  else if(zoneKey==="spearhead_assault"){fillZ(()=>{ctx.moveTo(0,py(12));ctx.lineTo(px(9),H/2);ctx.lineTo(0,H-py(12));ctx.closePath();},P1,P1);fillZ(()=>{ctx.moveTo(W,py(12));ctx.lineTo(W-px(9),H/2);ctx.lineTo(W,H-py(12));ctx.closePath();},P2,P2);}
+  else if(zoneKey==="search_and_destroy"){fillZ(()=>ctx.rect(0,0,W,py(15)),P1,P1);fillZ(()=>ctx.rect(0,H-py(15),W,py(15)),P2,P2);ctx.save();ctx.beginPath();ctx.arc(W/2,H/2,px(9),0,Math.PI*2);ctx.fillStyle="rgba(5,13,26,0.85)";ctx.fill();ctx.strokeStyle="#f43f5e";ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#f43f5e";ctx.font="bold 10px 'Rajdhani',monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText('9" EXCL.',W/2,H/2);ctx.restore();}
+  else if(zoneKey==="front_line_assault"){fillZ(()=>{ctx.moveTo(0,0);ctx.lineTo(W,0);ctx.lineTo(W/2+px(6),py(15));ctx.lineTo(W/2,H/2-py(9));ctx.lineTo(W/2-px(6),py(15));ctx.closePath();},P1,P1);fillZ(()=>{ctx.moveTo(0,H);ctx.lineTo(W,H);ctx.lineTo(W/2+px(6),H-py(15));ctx.lineTo(W/2,H/2+py(9));ctx.lineTo(W/2-px(6),H-py(15));ctx.closePath();},P2,P2);}
+  else if(zoneKey==="vanguard_strike"){fillZ(()=>{ctx.moveTo(0,H);ctx.lineTo(W,H);ctx.lineTo(W,H-py(14.5));ctx.lineTo(W/2+px(12),H/2);ctx.lineTo(W/2,H/2+py(12));ctx.lineTo(px(21.5),0);ctx.lineTo(0,0);ctx.closePath();},P1,P1);fillZ(()=>{ctx.moveTo(W,0);ctx.lineTo(0,0);ctx.lineTo(0,py(14.5));ctx.lineTo(W/2-px(12),H/2);ctx.lineTo(W/2,H/2-py(12));ctx.lineTo(W-px(21.5),H);ctx.lineTo(W,H);ctx.closePath();},P2,P2);}
+  const labels={dawn_of_war:[[W/2,py(6),P1],[W/2,H-py(6),P2]],hammer_and_anvil:[[W/2,py(12),P1],[W/2,H-py(12),P2]],spearhead_assault:[[px(3),H/2,P1],[W-px(3),H/2,P2]],search_and_destroy:[[W/2,py(7),P1],[W/2,H-py(7),P2]],front_line_assault:[[W/2,py(4),P1],[W/2,H-py(4),P2]],vanguard_strike:[[px(6),H-py(6),P1],[W-px(6),py(6),P2]]};
+  ctx.save();ctx.font="bold 11px 'Rajdhani',monospace";ctx.textAlign="center";ctx.textBaseline="middle";
+  (labels[zoneKey]||[]).forEach(([x,y,c],i)=>{ctx.fillStyle=c;ctx.shadowColor=c;ctx.shadowBlur=6;ctx.fillText(`J${i+1}`,x,y);ctx.shadowBlur=0;});
+  ctx.restore();
+}
 
-      const handleClick=(e)=>{
-        const r=canvasRef.current.getBoundingClientRect();
-        const mx=(e.clientX-r.left)/r.width,my=(e.clientY-r.top)/r.height;
-        let cl=null,md=0.07;
-        minis.forEach(m=>{const d=Math.hypot(m.x-mx,m.y-my);if(d<md){md=d;cl=m;}});
-        if(cl){setSelMini(cl.id);setAssignMenu({miniId:cl.id,x:e.clientX-r.left,y:e.clientY-r.top});}
-        else{setSelMini(null);setAssignMenu(null);}
-      };
+function drawUnit(ctx,mini,unit,playerColor,W,H,BW,selected,t,activeAuras){
+  const cx=mini.x*W,cy=mini.y*H,color=playerColor||"#3a5a7a";
+  const [r,g,b]=h2p(color),inchPx=W/BW,bsz=(unit.base_size_mm/2)*inchPx;
+  if(activeAuras.shoot){const mr=Math.max(0,...(unit.ranged_weapons||[]).map(w=>w.range_inches||0));if(mr>0){const rad=mr*inchPx;ctx.save();ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.strokeStyle="#38bdf8";ctx.lineWidth=1;ctx.setLineDash([3,5]);ctx.shadowColor="#38bdf8";ctx.shadowBlur=4;ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.font="bold 8px 'Rajdhani',monospace";ctx.fillStyle="#38bdf8";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(`AD ${mr}"`,cx,cy-(bsz+rad)-5);ctx.restore();}}
+  if(activeAuras.move){const mv=parseInt(unit.stats.M)||6;const rad=mv*inchPx;ctx.save();ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.strokeStyle="#22c55e";ctx.lineWidth=1.5;ctx.shadowColor="#22c55e";ctx.shadowBlur=selected?10:5;ctx.setLineDash([4,8]);ctx.lineDashOffset=-(t*15)%12;ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.font="bold 8px 'Rajdhani',monospace";ctx.fillStyle="#22c55e";ctx.textAlign="left";ctx.textBaseline="middle";ctx.fillText(`M ${mv}"`,cx+(bsz+rad)*0.7+3,cy-(bsz+rad)*0.7);ctx.restore();}
+  if(activeAuras.charge){const mv=parseInt(unit.stats.M)||6;const rad=(mv+7)*inchPx;ctx.save();ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.strokeStyle="#a855f7";ctx.lineWidth=1;ctx.setLineDash([6,4]);ctx.shadowColor="#a855f7";ctx.shadowBlur=3;ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.restore();}
+  if(activeAuras.abilities){(unit.abilities||[]).forEach(ab=>{if(!ab.aura||!ab.aura.radius_inches) return;const rad=ab.aura.radius_inches*inchPx;const col=ab.aura.color||"#fbbf24";const [ar,ag,ab2]=h2p(col);ctx.save();ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.shadowColor=col;ctx.shadowBlur=8;ctx.stroke();ctx.shadowBlur=0;ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.fillStyle=`rgba(${ar},${ag},${ab2},0.06)`;ctx.fill();ctx.font="bold 8px 'Rajdhani',monospace";ctx.fillStyle=col;ctx.textAlign="center";ctx.textBaseline="middle";const angle=Math.PI*1.25;ctx.fillText(ab.aura.display_text,cx+(bsz+rad)*Math.cos(angle),cy+(bsz+rad)*Math.sin(angle)-7);ctx.restore();});}
+  ctx.save();ctx.beginPath();if(unit.base_type==="oval")ctx.ellipse(cx,cy,bsz,bsz*0.6,0,0,Math.PI*2);else ctx.arc(cx,cy,bsz,0,Math.PI*2);ctx.fillStyle=`rgba(${r},${g},${b},0.15)`;ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=selected?2:1.2;ctx.shadowColor=color;ctx.shadowBlur=selected?14:7;ctx.stroke();ctx.shadowBlur=0;
+  ctx.fillStyle=color;ctx.font=`bold ${Math.max(8,bsz*0.9)}px 'Rajdhani',monospace`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.shadowColor=color;ctx.shadowBlur=5;ctx.fillText(unit.name[0].toUpperCase(),cx,cy);ctx.shadowBlur=0;
+  ctx.font="bold 8px 'Rajdhani',monospace";ctx.fillText(unit.name.split(' ')[0],cx,cy+bsz+3);
+  if(!playerColor){ctx.beginPath();ctx.arc(cx+bsz*0.7,cy-bsz*0.7,5,0,Math.PI*2);ctx.fillStyle="#f97316";ctx.shadowColor="#f97316";ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;ctx.fillStyle="#050d1a";ctx.font="bold 7px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",cx+bsz*0.7,cy-bsz*0.7);}
+  ctx.restore();
+}
 
-      const assignPlayer=(miniId,playerId)=>{setMinis(prev=>prev.map(m=>m.id===miniId?{...m,playerId}:m));setAssignMenu(null);setSelMini(null);};
+// ─── ARUCO ───────────────────────────────────────────────────────────────────
+const ARUCO_4X4={
+  0:[[1,0,0,1],[1,1,0,0],[0,1,0,0],[0,0,1,1]],
+  1:[[1,1,0,0],[0,1,1,0],[1,0,0,1],[0,1,0,1]],
+  2:[[0,0,1,1],[1,0,1,0],[0,1,0,1],[1,1,0,0]],
+  3:[[1,0,1,0],[0,0,1,1],[1,1,0,0],[0,1,1,0]],
+};
+const ARUCO_CORNERS=["A — Sup. Izquierda","B — Sup. Derecha","C — Inf. Derecha","D — Inf. Izquierda"];
+const ARUCO_FACTIONS=[
+  {id:"space_marines",name:"Space Marines",color:"#38bdf8",
+   draw:(ctx,cx,cy,sz)=>{
+     const s=sz*0.38;ctx.save();ctx.translate(cx,cy);ctx.strokeStyle="#38bdf8";ctx.fillStyle="#38bdf8";ctx.lineWidth=sz*0.04;
+     ctx.beginPath();ctx.ellipse(0,0,s*0.18,s*0.32,0,0,Math.PI*2);ctx.fill();
+     ctx.beginPath();ctx.moveTo(-s*0.08,-s*0.1);ctx.bezierCurveTo(-s*0.6,-s*0.5,-s*0.9,0,-s*0.6,s*0.3);ctx.bezierCurveTo(-s*0.3,s*0.15,-s*0.15,s*0.05,-s*0.08,s*0.1);ctx.closePath();ctx.fill();
+     ctx.beginPath();ctx.moveTo(s*0.08,-s*0.1);ctx.bezierCurveTo(s*0.6,-s*0.5,s*0.9,0,s*0.6,s*0.3);ctx.bezierCurveTo(s*0.3,s*0.15,s*0.15,s*0.05,s*0.08,s*0.1);ctx.closePath();ctx.fill();
+     ctx.beginPath();ctx.arc(0,-s*0.28,s*0.14,Math.PI,0);ctx.stroke();
+     for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(i*s*0.06,-s*0.38);ctx.lineTo(i*s*0.06,-s*0.28);ctx.stroke();}
+     ctx.restore();
+   }},
+  {id:"raven_guard",name:"Raven Guard",color:"#c8dff5",
+   draw:(ctx,cx,cy,sz)=>{
+     const s=sz*0.38;ctx.save();ctx.translate(cx,cy);ctx.fillStyle="#c8dff5";ctx.strokeStyle="#c8dff5";ctx.lineWidth=sz*0.035;
+     ctx.beginPath();ctx.ellipse(0,s*0.05,s*0.22,s*0.28,-0.2,0,Math.PI*2);ctx.fill();
+     ctx.beginPath();ctx.ellipse(s*0.05,-s*0.22,s*0.14,s*0.12,0.3,0,Math.PI*2);ctx.fill();
+     ctx.beginPath();ctx.moveTo(s*0.15,-s*0.26);ctx.lineTo(s*0.36,-s*0.2);ctx.lineTo(s*0.15,-s*0.16);ctx.closePath();ctx.fill();
+     ctx.beginPath();ctx.moveTo(-s*0.1,-s*0.05);ctx.bezierCurveTo(-s*0.7,-s*0.4,-s*0.85,s*0.1,-s*0.5,s*0.35);ctx.bezierCurveTo(-s*0.25,s*0.2,-s*0.1,s*0.1,-s*0.1,s*0.05);ctx.closePath();ctx.fill();
+     ctx.beginPath();ctx.moveTo(-s*0.1,s*0.28);ctx.lineTo(-s*0.25,s*0.52);ctx.lineTo(0,s*0.42);ctx.lineTo(s*0.15,s*0.52);ctx.lineTo(s*0.1,s*0.28);ctx.closePath();ctx.fill();
+     ctx.restore();
+   }},
+  {id:"aeldari",name:"Aeldari",color:"#22c55e",
+   draw:(ctx,cx,cy,sz)=>{
+     const s=sz*0.38;ctx.save();ctx.translate(cx,cy);ctx.strokeStyle="#22c55e";ctx.lineWidth=sz*0.045;ctx.lineCap="round";
+     ctx.beginPath();ctx.moveTo(-s*0.7,0);ctx.bezierCurveTo(-s*0.4,-s*0.55,s*0.4,-s*0.55,s*0.7,0);ctx.bezierCurveTo(s*0.4,s*0.55,-s*0.4,s*0.55,-s*0.7,0);ctx.stroke();
+     ctx.beginPath();ctx.arc(0,0,s*0.22,0,Math.PI*2);ctx.stroke();
+     ctx.fillStyle="#22c55e";ctx.beginPath();ctx.arc(0,0,s*0.09,0,Math.PI*2);ctx.fill();
+     [[0,-s*0.55],[0,s*0.55],[-s*0.55,0],[s*0.55,0]].forEach(([ex,ey])=>{ctx.beginPath();ctx.moveTo(ex*0.35,ey*0.35);ctx.lineTo(ex,ey);ctx.stroke();});
+     ctx.restore();
+   }},
+  {id:"tyranids",name:"Tiránidos",color:"#a855f7",
+   draw:(ctx,cx,cy,sz)=>{
+     const s=sz*0.38;ctx.save();ctx.translate(cx,cy);ctx.strokeStyle="#a855f7";ctx.fillStyle="#a855f7";ctx.lineWidth=sz*0.045;ctx.lineCap="round";
+     ctx.beginPath();ctx.arc(0,0,s*0.18,0,Math.PI*2);ctx.fill();
+     ctx.lineWidth=sz*0.055;
+     ctx.beginPath();ctx.moveTo(-s*0.12,-s*0.12);ctx.bezierCurveTo(-s*0.35,-s*0.55,-s*0.1,-s*0.75,s*0.1,-s*0.55);ctx.stroke();
+     ctx.beginPath();ctx.moveTo(s*0.12,-s*0.12);ctx.bezierCurveTo(s*0.35,-s*0.55,s*0.1,-s*0.75,-s*0.1,-s*0.55);ctx.stroke();
+     ctx.lineWidth=sz*0.04;
+     ctx.beginPath();ctx.moveTo(-s*0.16,0);ctx.bezierCurveTo(-s*0.55,-s*0.2,-s*0.7,s*0.15,-s*0.45,s*0.4);ctx.stroke();
+     ctx.beginPath();ctx.moveTo(s*0.16,0);ctx.bezierCurveTo(s*0.55,-s*0.2,s*0.7,s*0.15,s*0.45,s*0.4);ctx.stroke();
+     ctx.beginPath();ctx.moveTo(0,s*0.18);ctx.bezierCurveTo(-s*0.1,s*0.5,s*0.25,s*0.65,s*0.1,s*0.8);ctx.stroke();
+     ctx.restore();
+   }},
+];
 
-      const css=`
-        .rb{border:1px solid #0e2a4a;background:transparent;color:#3a5a7a;cursor:pointer;font-family:'Rajdhani',monospace;font-weight:600;letter-spacing:1px;transition:all .2s;}
-        .rb:hover{border-color:#f97316;color:#f97316;box-shadow:0 0 8px rgba(249,115,22,0.18);}
-        .rb.on{border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.18);box-shadow:0 0 14px rgba(249,115,22,0.18);}
-        .rb.bon{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,0.12);}
-        .rb.gon{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.12);}
-        .rb.pon{border-color:#a855f7;color:#a855f7;background:rgba(168,85,247,.12);}
-        .rb.con{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,.12);}
-        .panel{background:#070f20;border:1px solid #0e2a4a;position:relative;overflow:hidden;}
-        .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#f97316,transparent);opacity:.4;}
-        .inp{width:100%;background:#050d1a;border:1px solid #0e2a4a;border-radius:3px;padding:5px 8px;color:#c8dff5;font-family:'Rajdhani',monospace;font-size:13px;outline:none;}
-        select.inp option{background:#070f20;}
-        .tag{font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:2px;}
-        .pulse{animation:pulse 2s ease-in-out infinite;}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-        .tgl{width:34px;height:18px;border-radius:9px;border:1px solid #0e2a4a;background:transparent;cursor:pointer;position:relative;transition:all .2s;flex-shrink:0;}
-        .tgl::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#3a5a7a;transition:all .2s;}
-        .tgl.on::after{background:var(--tc);transform:translateX(16px);}
-        .tgl.on{border-color:var(--tc);background:rgba(var(--tr),var(--tg),var(--tb),.18);}
-        ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:#050d1a;}::-webkit-scrollbar-thumb{background:#0e2a4a;}
-      `;
+function renderArucoMarker(canvas,faction,id){
+  const SZ=240;canvas.width=SZ;canvas.height=SZ;
+  const ctx=canvas.getContext("2d");
+  const CELL=SZ/6,B=CELL;
+  // Fondo blanco (borde exterior del ArUco)
+  ctx.fillStyle="#ffffff";ctx.fillRect(0,0,SZ,SZ);
+  // Interior negro
+  ctx.fillStyle="#000000";ctx.fillRect(B*0.4,B*0.4,SZ-B*0.8,SZ-B*0.8);
+  // Bits 4x4
+  const bits=ARUCO_4X4[id];
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++){
+    ctx.fillStyle=bits[r][c]===1?"#ffffff":"#000000";
+    ctx.fillRect(B+c*CELL+1,B+r*CELL+1,CELL-2,CELL-2);
+  }
+  // Símbolo semitransparente
+  ctx.globalAlpha=0.2;faction.draw(ctx,SZ/2,SZ/2,SZ);ctx.globalAlpha=1;
+  // Borde decorativo facción
+  ctx.strokeStyle=faction.color;ctx.lineWidth=3;ctx.globalAlpha=0.55;
+  ctx.strokeRect(3,3,SZ-6,SZ-6);ctx.globalAlpha=1;
+  // ID
+  ctx.fillStyle=faction.color;ctx.font="bold 11px monospace";
+  ctx.textAlign="right";ctx.textBaseline="bottom";
+  ctx.fillText(`ID:${id}`,SZ-5,SZ-3);
+}
 
-      const Toggle=({on,color,onChange})=>{
-        const[r,g,b]=h2p(color);
-        return React.createElement('button',{className:`tgl ${on?"on":""}`,style:{'--tc':color,'--tr':r,'--tg':g,'--tb':b},onClick:onChange});
-      };
+function ArucoGenerator(){
+  const [selFaction,setSelFaction]=useState(ARUCO_FACTIONS[0]);
+  const canvasRefs=[useRef(null),useRef(null),useRef(null),useRef(null)];
 
-      return (
-        <div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Rajdhani',monospace",color:C.text}}>
-          <style>{css}</style>
+  useEffect(()=>{
+    canvasRefs.forEach((ref,i)=>{
+      if(ref.current)renderArucoMarker(ref.current,selFaction,i);
+    });
+  },[selFaction]);
 
-          {/* Header */}
-          <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`,padding:"9px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"relative"}}>
-            <div style={{position:"absolute",bottom:0,left:0,right:0,height:"1px",background:`linear-gradient(90deg,transparent,${C.accent},transparent)`,opacity:.4}}/>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:7,height:7,borderRadius:"50%",background:C.accent,boxShadow:`0 0 7px ${C.accent}`}} className="pulse"/>
-              <span style={{fontWeight:700,fontSize:15,letterSpacing:3,color:C.accent}}>WARGAME</span>
-              <span style={{fontWeight:400,fontSize:15,letterSpacing:3,color:C.text}}>VISION SYS</span>
-              <span style={{color:C.muted,fontSize:11,letterSpacing:1}}>// v1.0 DEMO</span>
+  const download=(idx)=>{
+    const c=canvasRefs[idx].current;if(!c)return;
+    const a=document.createElement("a");
+    a.download=`aruco_${selFaction.id}_${String.fromCharCode(65+idx)}_id${idx}.png`;
+    a.href=c.toDataURL("image/png");a.click();
+  };
+  const downloadAll=()=>[0,1,2,3].forEach(i=>setTimeout(()=>download(i),i*150));
+
+  return(
+    <div>
+      {/* Selector facción */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+        {ARUCO_FACTIONS.map(f=>(
+          <button key={f.id} onClick={()=>setSelFaction(f)}
+            style={{padding:"4px 10px",border:`1px solid ${selFaction.id===f.id?f.color:C.border}`,borderRadius:2,cursor:"pointer",background:selFaction.id===f.id?`rgba(${h2rgb(f.color)},.12)`:"transparent",color:selFaction.id===f.id?f.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:10,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
+            {f.name.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      {/* Grid de marcadores */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:10}}>
+        {[0,1,2,3].map(i=>(
+          <div key={i} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,padding:10,textAlign:"center"}}>
+            <div style={{fontSize:9,color:selFaction.color,fontWeight:700,letterSpacing:1,marginBottom:4}}>
+              {ARUCO_CORNERS[i]}
             </div>
-            <div style={{display:"flex",gap:5,alignItems:"center",fontSize:11,color:C.muted,letterSpacing:1}}>
-              <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",display:"inline-block",boxShadow:"0 0 6px #22c55e"}}/>
-              PROTOTIPO UI
-            </div>
+            <canvas ref={canvasRefs[i]}
+              style={{width:100,height:100,display:"block",margin:"0 auto",imageRendering:"pixelated",border:`1px solid ${C.border}`}}/>
+            <button onClick={()=>download(i)}
+              style={{marginTop:6,padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:9,fontWeight:700,letterSpacing:1,transition:"all .2s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.color=C.blue;}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
+              ↓ PNG
+            </button>
           </div>
+        ))}
+      </div>
+      {/* Descarga todos */}
+      <button onClick={downloadAll}
+        style={{width:"100%",padding:"8px",background:"transparent",border:`1px solid ${C.green}`,borderRadius:2,cursor:"pointer",color:C.green,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:2,transition:"all .2s"}}
+        onMouseEnter={e=>e.currentTarget.style.background="rgba(34,197,94,.1)"}
+        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+        ↓ DESCARGAR LOS 4 MARCADORES
+      </button>
+      {/* Instrucciones */}
+      <div style={{marginTop:10,padding:"8px 10px",background:C.bg,borderRadius:2,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:9,color:C.muted,letterSpacing:1,lineHeight:1.6}}>
+          Imprime a <span style={{color:C.text}}>3×3 cm exactos</span> · Pega en las <span style={{color:C.text}}>4 esquinas del tapete</span> · La cámara cenital los detecta automáticamente como referencia de calibración
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          {/* Tabs */}
-          <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.panel}}>
-            {TABS.map((t,i)=>(
-              <button key={t} className={`rb ${tab===t?"on":""}`} onClick={()=>setTab(t)}
-                style={{padding:"9px 18px",borderRadius:0,fontSize:11,letterSpacing:2,
-                  borderLeft:i>0?`1px solid ${C.border}`:"none",borderTop:"none",borderRight:"none",
-                  borderBottom:tab===t?`2px solid ${C.accent}`:"2px solid transparent"}}>
-                {t}
+// ─── COMPONENTES ─────────────────────────────────────────────────────────────
+function StatusBadge({status}){
+  const cfg={pending:{label:"PENDIENTE",color:"#3a5a7a",bg:"transparent"},deployed:{label:"EN JUEGO",color:"#22c55e",bg:"rgba(34,197,94,0.1)"},eliminated:{label:"ELIMINADA",color:"#f43f5e",bg:"rgba(244,63,94,0.1)"}};
+  const s=cfg[status]||cfg.pending;
+  return <span style={{fontSize:9,fontWeight:700,letterSpacing:1,padding:"1px 6px",borderRadius:2,color:s.color,background:s.bg,border:`1px solid ${s.color}44`}}>{s.label}</span>;
+}
+
+function UnitRow({unit,status,playerColor,onDeploy,onEliminate,selected,onClick}){
+  const maxRange=Math.max(0,...(unit.ranged_weapons||[]).map(w=>w.range_inches||0));
+  return(
+    <div className={`unit-row ${status} ${selected?"selected-unit":""}`} onClick={onClick}
+      style={{borderLeft:`3px solid ${status==="eliminated"?"#f43f5e44":status==="deployed"?C.green:playerColor||C.muted}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+            <span style={{fontWeight:700,fontSize:11,letterSpacing:1,color:status==="eliminated"?C.muted:playerColor||C.text}}>{unit.name}</span>
+            <span style={{fontSize:9,color:C.muted}}>×{unit.count}</span>
+            <StatusBadge status={status}/>
+          </div>
+          <div style={{display:"flex",gap:8,fontSize:9,color:C.muted}}>
+            <span>M:{unit.stats.M}</span><span>T:{unit.stats.T}</span><span>SV:{unit.stats.SV}</span><span>W:{unit.stats.W}</span>
+            {maxRange>0&&<span style={{color:"#38bdf866"}}>AD:{maxRange}"</span>}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:4,flexShrink:0}}>
+          {status==="pending"&&<button onClick={e=>{e.stopPropagation();onDeploy();}} className="rb gon" style={{padding:"3px 8px",fontSize:10}}>▶ DESPLEGAR</button>}
+          {status==="deployed"&&<button onClick={e=>{e.stopPropagation();onEliminate();}} className="rb ron" style={{padding:"3px 8px",fontSize:10}}>✕ ELIMINAR</button>}
+          {status==="eliminated"&&<span style={{fontSize:9,color:C.muted}}>BAJA</span>}
+        </div>
+      </div>
+      {selected&&status!=="eliminated"&&(
+        <div style={{marginTop:5,display:"flex",flexWrap:"wrap",gap:2}}>
+          {(unit.abilities||[]).filter(a=>a.aura).map(a=>(
+            <span key={a.name} className="aura-badge" style={{background:`rgba(${h2rgb(a.aura.color||"#fbbf24")},.1)`,color:a.aura.color||"#fbbf24",border:`1px solid ${a.aura.color||"#fbbf24"}33`}}>
+              {a.aura.radius_inches>0?`${a.aura.radius_inches}" `:""}
+              {a.aura.display_text}
+            </span>
+          ))}
+          {unit.damaged_profile&&<span className="aura-badge" style={{color:C.red,background:"rgba(244,63,94,.1)",border:"1px solid #f43f5e33"}}>DAÑADO: {unit.damaged_profile.effect}</span>}
+          {unit.patrol_squads&&<span className="aura-badge" style={{color:C.blue,background:"rgba(56,189,248,.1)",border:"1px solid #38bdf833"}}>ESCUADRA PATRULLA</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PatrolSelector({playerId,playerColor,playerName,patrol,patrols,system,mode,onSelectPatrol}){
+  const available=patrols.filter(p=>p.system===system&&p.game_mode===mode);
+  const fc=patrol?(FACTION_COLORS[patrol.faction_keyword]||C.blue):C.muted;
+  return(
+    <div className="panel fade-in" style={{borderRadius:2,padding:10,borderLeft:`2px solid ${playerColor}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+        <div style={{width:8,height:8,borderRadius:"50%",background:playerColor,boxShadow:`0 0 6px ${playerColor}`}}/>
+        <span style={{fontWeight:700,fontSize:12,color:playerColor,letterSpacing:1}}>{playerName}</span>
+        {patrol&&<span className="tag" style={{color:fc,background:`rgba(${h2rgb(fc)},.1)`,fontSize:9}}>{patrol.faction}</span>}
+      </div>
+      {available.length===0?(
+        <div style={{fontSize:10,color:C.muted,padding:"6px 0"}}>No hay patrullas para este modo. Importa desde CONFIG.</div>
+      ):(
+        <div style={{display:"flex",flexDirection:"column",gap:3}}>
+          {available.map(p=>{
+            const pfc=FACTION_COLORS[p.faction_keyword]||C.blue;
+            const isSel=patrol?.id===p.id;
+            return(
+              <button key={p.id} onClick={()=>onSelectPatrol(p)}
+                style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",background:isSel?`rgba(${h2rgb(pfc)},.1)`:"transparent",border:`1px solid ${isSel?pfc:C.border}`,borderRadius:2,cursor:"pointer",fontFamily:"'Rajdhani',monospace",textAlign:"left",transition:"all .2s"}}>
+                <div style={{width:5,height:5,borderRadius:"50%",background:pfc,flexShrink:0}}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:11,fontWeight:700,color:isSel?pfc:C.text,letterSpacing:1}}>{p.patrol_name}</div>
+                  <div style={{fontSize:9,color:C.muted}}>{p.faction} · {p.units?.length||0} unidades</div>
+                </div>
+                {isSel&&<span style={{fontSize:10,color:pfc}}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── APP ─────────────────────────────────────────────────────────────────────
+const TABS=["TABLERO","JUGADORES","JUEGO","CONFIG"];
+
+function App(){
+  const [activeSystem,setActiveSystem]=useState("wh40k");
+  const [activeMode,setActiveMode]=useState("combat_patrol");
+  const [players,setPlayers]=useState([{id:1,name:"JUGADOR I",color:PLAYER_COLORS[0]},{id:2,name:"JUGADOR II",color:PLAYER_COLORS[1]}]);
+  const [playerPatrols,setPlayerPatrols]=useState({});
+  const [unitStatus,setUnitStatus]=useState({});
+  const [minis,setMinis]=useState([]);
+  const [selMini,setSelMini]=useState(null);
+  const [assignMenu,setAssignMenu]=useState(null);
+  const [tab,setTab]=useState("TABLERO");
+  const [activeAuras,setActiveAuras]=useState({move:true,charge:true,shoot:true,abilities:true});
+  const [activeZone,setActiveZone]=useState(null);
+  const [showDeployMenu,setShowDeployMenu]=useState(false);
+  const [showLegend,setShowLegend]=useState(false);
+  const [tick,setTick]=useState(0);
+  const [selUnit,setSelUnit]=useState(null);
+  const [patrols,setPatrols]=useState(EMBEDDED_PATROLS);
+  const [apiKey,setApiKey]=useState("");
+  const [showApiKey,setShowApiKey]=useState(false);
+  const [pdfLoading,setPdfLoading]=useState(false);
+  const [pdfStatus,setPdfStatus]=useState(null);
+  const [dragOver,setDragOver]=useState(false);
+  const fileRef=useRef(null);
+  const canvasRef=useRef(null);
+
+  useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),80);return()=>clearInterval(i);},[]);
+  useEffect(()=>{if(!showDeployMenu)return;const fn=()=>setShowDeployMenu(false);document.addEventListener('click',fn);return()=>document.removeEventListener('click',fn);},[showDeployMenu]);
+
+  const changeSystem=(sys)=>{setActiveSystem(sys);setActiveMode(Object.keys(GAME_SYSTEMS[sys].modes)[0]);setPlayerPatrols({});setUnitStatus({});setMinis([]);};
+  const changeMode=(mode)=>{setActiveMode(mode);setPlayerPatrols({});setUnitStatus({});setMinis([]);};
+
+  const selectPatrol=(playerId,patrol)=>{
+    setPlayerPatrols(prev=>({...prev,[playerId]:patrol}));
+    const initial={};(patrol.units||[]).forEach(u=>{initial[u.id]="pending";});
+    setUnitStatus(prev=>({...prev,[playerId]:initial}));
+    setMinis(prev=>prev.filter(m=>m.playerId!==playerId));
+  };
+
+  const deployUnit=(playerId,unit,patrol)=>{
+    const newMini={id:`mini_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,unitData:{...unit,faction_keyword:patrol.faction_keyword},x:playerId===1?0.1+Math.random()*0.15:0.75+Math.random()*0.15,y:0.1+Math.random()*0.8,playerId};
+    setMinis(prev=>[...prev,newMini]);
+    setUnitStatus(prev=>({...prev,[playerId]:{...prev[playerId],[unit.id]:"deployed"}}));
+  };
+
+  const eliminateUnit=(playerId,unitId)=>{
+    setMinis(prev=>prev.filter(m=>!(m.playerId===playerId&&m.unitData?.id===unitId)));
+    setUnitStatus(prev=>({...prev,[playerId]:{...prev[playerId],[unitId]:"eliminated"}}));
+  };
+
+  const removeMiniById=(miniId)=>{
+    const mini=minis.find(m=>m.id===miniId);
+    if(mini&&mini.playerId&&mini.unitData)eliminateUnit(mini.playerId,mini.unitData.id);
+    else setMinis(prev=>prev.filter(m=>m.id!==miniId));
+    setSelMini(null);setAssignMenu(null);
+  };
+
+  const sysInfo=GAME_SYSTEMS[activeSystem];
+  const modeInfo=sysInfo.modes[activeMode];
+
+  useEffect(()=>{
+    if(tab!=="TABLERO")return;
+    const canvas=canvasRef.current;if(!canvas)return;
+    const ctx=canvas.getContext("2d");
+    const W=canvas.width,H=canvas.height,t=tick*0.02,BW=modeInfo.w,BH=modeInfo.h;
+    ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle="rgba(14,42,74,0.5)";ctx.lineWidth=0.4;
+    for(let x=0;x<=W;x+=W/BW){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=0;y<=H;y+=H/BH){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    if(activeZone)drawDeploymentZone(ctx,W,H,BW,BH,activeZone);
+    [[0,0],[W,0],[0,H],[W,H]].forEach(([x,y])=>{const s=16,ox=x===0?1:-1,oy=y===0?1:-1;ctx.strokeStyle=C.accent;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x+ox*s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+oy*s);ctx.stroke();});
+    minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,W,H,BW,selMini===mini.id,t,activeAuras);});
+  },[tab,minis,players,selMini,tick,activeAuras,activeZone,modeInfo]);
+
+  const handleCanvasClick=(e)=>{
+    const rect=canvasRef.current.getBoundingClientRect();
+    const sx=canvasRef.current.width/rect.width,sy=canvasRef.current.height/rect.height;
+    const mx=(e.clientX-rect.left)*sx/canvasRef.current.width,my=(e.clientY-rect.top)*sy/canvasRef.current.height;
+    let closest=null,minDist=0.06;
+    minis.forEach(m=>{const d=Math.hypot(m.x-mx,m.y-my);if(d<minDist){minDist=d;closest=m;}});
+    if(closest){setSelMini(closest.id);setAssignMenu({miniId:closest.id,x:e.clientX-rect.left,y:e.clientY-rect.top});}
+    else{setSelMini(null);setAssignMenu(null);}
+  };
+
+  const handleCanvasDrag=(e)=>{
+    if(!selMini)return;
+    const rect=canvasRef.current.getBoundingClientRect();
+    const sx=canvasRef.current.width/rect.width;
+    const nx=Math.max(0,Math.min(1,(e.clientX-rect.left)*sx/canvasRef.current.width));
+    const ny=Math.max(0,Math.min(1,(e.clientY-rect.top)*(canvasRef.current.height/rect.height)/canvasRef.current.height));
+    setMinis(prev=>prev.map(m=>m.id===selMini?{...m,x:nx,y:ny}:m));
+    setAssignMenu(null);
+  };
+
+  const gameStats=useMemo(()=>{
+    const stats={};
+    players.forEach(p=>{const patrol=playerPatrols[p.id];const status=unitStatus[p.id]||{};const units=patrol?.units||[];stats[p.id]={total:units.length,pending:units.filter(u=>status[u.id]==="pending").length,deployed:units.filter(u=>status[u.id]==="deployed").length,eliminated:units.filter(u=>status[u.id]==="eliminated").length};});
+    return stats;
+  },[players,playerPatrols,unitStatus]);
+
+  const processPDF=async(file)=>{
+    if(!apiKey){setPdfStatus({type:"error",msg:"Introduce tu API key en CONFIG."});return;}
+    setPdfLoading(true);setPdfStatus({type:"info",msg:`Procesando: ${file.name}...`});
+    try{
+      const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=()=>rej(new Error("Error leyendo archivo"));r.readAsDataURL(file);});
+      const prompt=`Analiza este PDF de Combat Patrol de Warhammer 40,000 y extrae los datos en formato JSON.\n\nEstructura requerida:\n{\n  "id": "string_sin_espacios",\n  "system": "wh40k",\n  "game_mode": "combat_patrol",\n  "faction": "Nombre Facción",\n  "faction_keyword": "Keyword",\n  "patrol_name": "Nombre",\n  "faction_ability": {"name":"...","description":"..."},\n  "enhancements": {"default":{"name":"...","description":"..."},"optional":{"name":"...","description":"..."}},\n  "secondary_objectives": {"default":{"name":"...","description":"..."},"optional":{"name":"...","description":"..."}},\n  "stratagems": [{"name":"...","cost_cp":1,"when":"...","effect":"..."}],\n  "units": [{"id":"string_id","name":"...","role":"warlord|battleline|troops|elite|fast_attack|heavy_support|support","count":1,"keywords":[],"stats":{"M":"6\\"","T":4,"SV":"3+","W":2,"LD":"6+","OC":1},"invulnerable_save":null,"base_size_mm":32,"base_type":"round|oval","ranged_weapons":[{"name":"...","keywords":[],"range_inches":24,"attacks":2,"skill":"3+","strength":4,"AP":0,"damage":1}],"melee_weapons":[{"name":"...","keywords":[],"range_inches":0,"attacks":3,"skill":"3+","strength":4,"AP":0,"damage":1}],"abilities":[{"name":"...","type":"core|faction|special","description":"...","aura":null}]}]\n}\n\nPara el campo aura: inclúyelo solo si la habilidad tiene efecto de área visible en tablero. Formato: {"type":"buff|synapse|denial|debuff","radius_inches":6,"affects":"unit","display_text":"Texto corto","color":"#hex"}. Color sugerido: buff=#fbbf24, synapse=#a855f7, denial=#f43f5e.\nResponde SOLO con JSON válido, sin markdown.`;
+      const response=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[{type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},{type:"text",text:prompt}]}]})});
+      if(!response.ok){const e=await response.json();throw new Error(e.error?.message||`HTTP ${response.status}`);}
+      const data=await response.json();
+      const raw=data.content.map(c=>c.text||"").join("").trim();
+      const clean=raw.replace(/^```json?\s*/,"").replace(/```\s*$/,"").trim();
+      const parsed=JSON.parse(clean);
+      if(!parsed.units||!Array.isArray(parsed.units))throw new Error("Falta campo 'units'");
+      const exists=patrols.find(p=>p.id===parsed.id);
+      if(exists)setPatrols(prev=>prev.map(p=>p.id===parsed.id?parsed:p));
+      else setPatrols(prev=>[...prev,parsed]);
+      setPdfStatus({type:"success",msg:`✓ ${parsed.patrol_name} importada (${parsed.units.length} unidades)`});
+    }catch(err){setPdfStatus({type:"error",msg:`Error: ${err.message}`});}
+    finally{setPdfLoading(false);}
+  };
+
+  const handleFileInput=(e)=>{const f=e.target.files[0];if(f&&f.type==="application/pdf")processPDF(f);};
+  const handleDrop=(e)=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f&&f.type==="application/pdf")processPDF(f);};
+
+  const unassigned=minis.filter(m=>!m.playerId).length;
+
+  return(
+    <div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Rajdhani',monospace",color:C.text}}>
+
+      {/* Header */}
+      <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`,padding:"8px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"relative"}}>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:"1px",background:`linear-gradient(90deg,transparent,${C.accent},transparent)`,opacity:.4}}/>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:C.accent,boxShadow:`0 0 7px ${C.accent}`}} className="pulse"/>
+          <span style={{fontWeight:700,fontSize:15,letterSpacing:3,color:C.accent}}>WARGAME</span>
+          <span style={{fontWeight:400,fontSize:15,letterSpacing:3,color:C.text}}>VISION SYS</span>
+          <span style={{color:C.muted,fontSize:11,letterSpacing:1}}>// v3.0</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{display:"flex",gap:4}}>
+            {Object.entries(GAME_SYSTEMS).map(([key,sys])=>(
+              <button key={key} onClick={()=>changeSystem(key)} className={`rb ${activeSystem===key?"bon":""}`}
+                style={{padding:"3px 9px",fontSize:10,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
+                {sys.short}
               </button>
             ))}
-            <div style={{flex:1,borderBottom:"2px solid transparent"}}/>
           </div>
+          <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:C.muted,letterSpacing:1}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block",boxShadow:`0 0 6px ${C.green}`}}/>
+            PROTOTIPO
+          </div>
+        </div>
+      </div>
 
-          {/* TABLERO */}
-          {tab==="TABLERO"&&(
-            <div style={{padding:14}}>
-              <div style={{marginBottom:8,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
-                {Object.entries(AURA_TYPES).map(([key,{label,color}])=>{
-                  const[r,g,b]=h2p(color);
-                  return(
-                    <button key={key} onClick={()=>setActiveAuras(prev=>({...prev,[key]:!prev[key]}))}
-                      style={{display:"flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:2,cursor:"pointer",
-                        border:`1px solid ${activeAuras[key]?color:C.border}`,
-                        background:activeAuras[key]?`rgba(${r},${g},${b},.1)`:"transparent",
-                        color:activeAuras[key]?color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
-                      <div style={{width:5,height:5,borderRadius:"50%",background:activeAuras[key]?color:C.muted}}/>
-                      {label} — {Object.values(AURA_TYPES).find(a=>a.label===label)?.full}
-                    </button>
-                  );
-                })}
-                {minis.filter(m=>!m.playerId).length>0&&(
-                  <span className="tag pulse" style={{background:"rgba(249,115,22,.1)",color:C.accent,border:`1px solid #7c3100`,marginLeft:"auto"}}>
-                    ⚠ {minis.filter(m=>!m.playerId).length} SIN ASIGNAR
-                  </span>
-                )}
-              </div>
-              <div style={{position:"relative",display:"inline-block"}}>
-                <canvas ref={canvasRef} width={520} height={400} onClick={handleClick}
-                  style={{borderRadius:2,border:`1px solid ${C.border}`,cursor:"crosshair",display:"block"}}/>
-                {assignMenu&&(
-                  <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,
-                    background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:160,boxShadow:`0 0 18px rgba(249,115,22,0.18)`}}>
-                    <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
-                    {players.map(p=>(
-                      <button key={p.id} onClick={()=>assignPlayer(assignMenu.miniId,p.id)}
-                        style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"5px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.text,fontSize:12,fontFamily:"'Rajdhani',monospace",fontWeight:600,letterSpacing:1}}
-                        onMouseEnter={e=>e.currentTarget.style.background="rgba(249,115,22,0.18)"}
-                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                        <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>
-                        {p.name}
+      {/* Tabs */}
+      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.panel}}>
+        {TABS.map((t,i)=>(
+          <button key={t} className={`rb ${tab===t?"on":""}`} onClick={()=>setTab(t)}
+            style={{padding:"9px 18px",borderRadius:0,fontSize:11,letterSpacing:2,borderLeft:i>0?`1px solid ${C.border}`:"none",borderTop:"none",borderRight:"none",borderBottom:tab===t?`2px solid ${C.accent}`:"2px solid transparent"}}>
+            {t}
+            {t==="JUEGO"&&Object.keys(playerPatrols).length>0&&(
+              <span style={{marginLeft:5,fontSize:9,color:C.green,background:"rgba(34,197,94,.1)",padding:"1px 5px",borderRadius:2}}>{Object.keys(playerPatrols).length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ TABLERO ══ */}
+      {tab==="TABLERO"&&(
+        <div style={{padding:14,display:"flex",gap:14}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              {[{key:"move",label:"M",color:C.green},{key:"charge",label:"C",color:C.purple},{key:"shoot",label:"AD",color:C.blue},{key:"abilities",label:"HAB",color:C.yellow}].map(({key,label,color})=>{
+                const [r,g,b]=h2p(color);
+                return(<button key={key} onClick={()=>setActiveAuras(prev=>({...prev,[key]:!prev[key]}))}
+                  style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:2,cursor:"pointer",border:`1px solid ${activeAuras[key]?color:C.border}`,background:activeAuras[key]?`rgba(${r},${g},${b},.1)`:"transparent",color:activeAuras[key]?color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
+                  <div style={{width:5,height:5,borderRadius:"50%",background:activeAuras[key]?color:C.muted}}/>{label}
+                </button>);
+              })}
+              <button onClick={()=>setShowLegend(true)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:C.blue,color:C.blue}}>? ÍNDICE</button>
+              <div style={{position:"relative"}} onClick={e=>e.stopPropagation()}>
+                <button onClick={()=>setShowDeployMenu(v=>!v)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:activeZone?C.green:C.border,color:activeZone?C.green:C.muted,background:activeZone?"rgba(34,197,94,.1)":"transparent"}}>
+                  ⬡ DESPLIEGUE{activeZone?` — ${DEPLOY_ZONES[activeZone].label}`:""}
+                </button>
+                {showDeployMenu&&(
+                  <div style={{position:"absolute",top:"110%",left:0,zIndex:20,background:C.panel,border:`1px solid ${C.border}`,borderRadius:2,padding:8,minWidth:240,boxShadow:"0 0 20px rgba(0,0,0,0.5)"}}>
+                    <div style={{fontSize:10,color:C.muted,letterSpacing:2,marginBottom:8}}>ZONA DE DESPLIEGUE</div>
+                    {Object.entries(DEPLOY_ZONES).map(([key,{label,desc}])=>(
+                      <button key={key} onClick={()=>{setActiveZone(activeZone===key?null:key);setShowDeployMenu(false);}}
+                        style={{display:"block",width:"100%",textAlign:"left",padding:"6px 8px",background:activeZone===key?"rgba(34,197,94,.12)":"transparent",border:"none",borderRadius:2,cursor:"pointer",marginBottom:2,color:activeZone===key?C.green:C.text,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>
+                        <div>{label}</div><div style={{fontSize:10,color:C.muted,fontWeight:400}}>{desc}</div>
                       </button>
                     ))}
-                    <div style={{borderTop:`1px solid ${C.border}`,margin:"3px 0"}}/>
-                    <button onClick={()=>assignPlayer(assignMenu.miniId,null)}
-                      style={{width:"100%",padding:"4px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.muted,fontSize:11,fontFamily:"'Rajdhani',monospace",letterSpacing:1,textAlign:"left"}}>
-                      ✕ DESASIGNAR
-                    </button>
+                    {activeZone&&<button onClick={()=>{setActiveZone(null);setShowDeployMenu(false);}} style={{display:"block",width:"100%",padding:"5px 8px",marginTop:4,background:"transparent",border:`1px solid ${C.red}`,borderRadius:2,cursor:"pointer",color:C.red,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>✕ OCULTAR ZONA</button>}
                   </div>
                 )}
               </div>
-              <div style={{marginTop:8,display:"flex",gap:14,flexWrap:"wrap"}}>
-                {players.map(p=>(
-                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,letterSpacing:1}}>
-                    <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>
-                    <span style={{color:p.color,fontWeight:600}}>{p.name}</span>
-                    <span style={{color:C.muted}}>· {minis.filter(m=>m.playerId===p.id).length} UNIDADES</span>
-                  </div>
-                ))}
+              {unassigned>0&&<span className="tag pulse" style={{marginLeft:"auto",background:"rgba(249,115,22,.1)",color:C.accent,border:"1px solid #7c3100"}}>⚠ {unassigned} SIN ASIGNAR</span>}
+            </div>
+            <div style={{position:"relative"}}>
+              <canvas ref={canvasRef} width={700} height={520} onClick={handleCanvasClick} onMouseMove={e=>{if(e.buttons===1&&selMini)handleCanvasDrag(e);}} style={{borderRadius:2,border:`1px solid ${C.border}`,cursor:"crosshair",display:"block",width:"100%",height:"auto"}}/>
+              {assignMenu&&(
+                <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
+                  <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
+                  {players.map(p=>(
+                    <button key={p.id} onClick={()=>{setMinis(prev=>prev.map(m=>m.id===assignMenu.miniId?{...m,playerId:p.id}:m));setAssignMenu(null);setSelMini(null);}}
+                      style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"5px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.text,fontSize:12,fontFamily:"'Rajdhani',monospace",fontWeight:600,letterSpacing:1}}
+                      onMouseEnter={e=>e.currentTarget.style.background="rgba(249,115,22,0.18)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>{p.name}
+                    </button>
+                  ))}
+                  <div style={{borderTop:`1px solid ${C.border}`,margin:"3px 0"}}/>
+                  <button onClick={()=>removeMiniById(assignMenu.miniId)} style={{width:"100%",padding:"4px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.red,fontSize:11,fontFamily:"'Rajdhani',monospace",letterSpacing:1,textAlign:"left"}}>✕ ELIMINAR DEL TABLERO</button>
+                </div>
+              )}
+            </div>
+            <div style={{marginTop:8,display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
+              {players.map(p=>{const s=gameStats[p.id]||{};return(
+                <div key={p.id} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,letterSpacing:1}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>
+                  <span style={{color:p.color,fontWeight:600}}>{p.name}</span>
+                  <span style={{color:C.muted}}>{s.deployed||0} en juego{s.eliminated>0?` · ${s.eliminated} bajas`:""}{s.pending>0?` · ${s.pending} pend.`:""}</span>
+                </div>
+              );})}
+              {minis.length===0&&<span style={{fontSize:10,color:C.muted}}>Ve a JUEGO para seleccionar patrullas y desplegar unidades</span>}
+            </div>
+          </div>
+          <div style={{width:190,flexShrink:0}}>
+            <div className="panel" style={{borderRadius:2,padding:10,marginBottom:8}}>
+              <div style={{color:C.muted,fontSize:10,letterSpacing:2,marginBottom:6}}>MODO ACTIVO</div>
+              <div style={{fontSize:11,fontWeight:700,color:sysInfo.color,letterSpacing:1}}>{sysInfo.short}</div>
+              <div style={{fontSize:10,color:C.text}}>{modeInfo.label}</div>
+              <div style={{fontSize:9,color:C.muted,marginTop:2}}>{modeInfo.w}" × {modeInfo.h}"</div>
+            </div>
+            {players.map(p=>{const patrol=playerPatrols[p.id];const s=gameStats[p.id]||{};const fc=patrol?(FACTION_COLORS[patrol.faction_keyword]||C.blue):C.muted;return(
+              <div key={p.id} className="panel" style={{borderRadius:2,padding:10,marginBottom:6,borderLeft:`2px solid ${p.color}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:5}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:p.color}}/>
+                  <span style={{fontSize:11,fontWeight:700,color:p.color,letterSpacing:1}}>{p.name}</span>
+                </div>
+                {patrol?(
+                  <>
+                    <div style={{fontSize:10,color:fc,marginBottom:4}}>{patrol.patrol_name}</div>
+                    <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                      {s.deployed>0&&<span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:9}}>{s.deployed} en juego</span>}
+                      {s.pending>0&&<span className="tag" style={{color:C.muted,background:C.bg,fontSize:9}}>{s.pending} pend.</span>}
+                      {s.eliminated>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:9}}>{s.eliminated} bajas</span>}
+                    </div>
+                  </>
+                ):<div style={{fontSize:10,color:C.muted}}>Sin patrulla.</div>}
+              </div>
+            );})}
+          </div>
+        </div>
+      )}
+
+      {/* ══ JUGADORES ══ */}
+      {tab==="JUGADORES"&&(
+        <div style={{padding:14,maxWidth:420}}>
+          <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:12}}>// REGISTRO DE JUGADORES</div>
+          {players.map(p=>(
+            <div key={p.id} className="panel" style={{borderRadius:2,padding:10,marginBottom:7,display:"flex",alignItems:"center",gap:10,borderLeft:`2px solid ${p.color}`}}>
+              <div style={{width:12,height:12,borderRadius:"50%",background:p.color,boxShadow:`0 0 8px ${p.color}`,flexShrink:0}}/>
+              <span style={{flex:1,fontWeight:700,letterSpacing:1,color:p.color,fontSize:13}}>{p.name}</span>
+              <span className="tag" style={{color:p.color,background:`rgba(${h2rgb(p.color)},.1)`}}>{minis.filter(m=>m.playerId===p.id).length} MINIS</span>
+              <button onClick={()=>setPlayers(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"2px 7px",fontSize:11}}>✕</button>
+            </div>
+          ))}
+          <button onClick={()=>setPlayers(prev=>{const id=Math.max(0,...prev.map(p=>p.id))+1;return[...prev,{id,name:`JUGADOR ${["I","II","III","IV","V","VI"][id-1]||id}`,color:PLAYER_COLORS[(id-1)%PLAYER_COLORS.length]}];})} className="rb" style={{width:"100%",padding:"9px",fontSize:11,letterSpacing:2,marginTop:3}}>+ AÑADIR JUGADOR</button>
+        </div>
+      )}
+
+      {/* ══ JUEGO ══ */}
+      {tab==="JUEGO"&&(
+        <div style={{padding:14}}>
+          {/* Sistema + Modo */}
+          <div className="panel" style={{borderRadius:2,padding:12,marginBottom:12}}>
+            <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
+              <div>
+                <div style={{color:C.muted,fontSize:10,letterSpacing:2,marginBottom:6}}>SISTEMA DE JUEGO</div>
+                <div style={{display:"flex",gap:4}}>
+                  {Object.entries(GAME_SYSTEMS).map(([key,sys])=>(
+                    <button key={key} onClick={()=>changeSystem(key)} className={`rb ${activeSystem===key?"bon":""}`}
+                      style={{padding:"5px 12px",fontSize:11,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
+                      {sys.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{color:C.muted,fontSize:10,letterSpacing:2,marginBottom:6}}>MODO DE JUEGO</div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {Object.entries(sysInfo.modes).map(([key,m])=>(
+                    <button key={key} onClick={()=>changeMode(key)} className={`rb ${activeMode===key?"on":""}`} style={{padding:"5px 12px",fontSize:11,letterSpacing:1}}>{m.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{marginLeft:"auto",textAlign:"right"}}>
+                <div style={{fontSize:10,color:C.muted,marginBottom:2}}>TABLERO</div>
+                <div style={{fontSize:14,fontWeight:700,color:sysInfo.color}}>{modeInfo.w}" × {modeInfo.h}"</div>
+                <div style={{fontSize:10,color:C.muted}}>{modeInfo.maxRounds} rondas</div>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* JUGADORES */}
-          {tab==="JUGADORES"&&(
-            <div style={{padding:14,maxWidth:400}}>
-              <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:12}}>// REGISTRO DE JUGADORES</div>
-              {players.map(p=>(
-                <div key={p.id} className="panel" style={{borderRadius:2,padding:10,marginBottom:7,display:"flex",alignItems:"center",gap:10,borderLeft:`2px solid ${p.color}`}}>
-                  <div style={{width:12,height:12,borderRadius:"50%",background:p.color,boxShadow:`0 0 8px ${p.color}`,flexShrink:0}}/>
-                  <span style={{flex:1,fontWeight:700,letterSpacing:1,color:p.color,fontSize:13}}>{p.name}</span>
-                  <span className="tag" style={{color:p.color,background:`rgba(${h2rgb(p.color)},.1)`}}>{minis.filter(m=>m.playerId===p.id).length} UNID.</span>
-                  <button onClick={()=>setPlayers(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"2px 7px",borderRadius:2,fontSize:11}}>✕</button>
-                </div>
-              ))}
-              <button onClick={()=>{const id=Math.max(...players.map(p=>p.id))+1;setPlayers(prev=>[...prev,{id,name:`JUGADOR ${["I","II","III","IV","V","VI"][id-1]||id}`,color:PLAYER_COLORS[(id-1)%PLAYER_COLORS.length]}]);}}
-                className="rb" style={{width:"100%",padding:"9px",borderRadius:2,fontSize:11,letterSpacing:2,marginTop:3}}>+ AÑADIR JUGADOR</button>
-            </div>
-          )}
+          {/* Selectores de patrulla */}
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${players.length},1fr)`,gap:10,marginBottom:14}}>
+            {players.map(p=>(
+              <PatrolSelector key={p.id} playerId={p.id} playerColor={p.color} playerName={p.name}
+                patrol={playerPatrols[p.id]} patrols={patrols} system={activeSystem} mode={activeMode}
+                onSelectPatrol={(patrol)=>selectPatrol(p.id,patrol)}/>
+            ))}
+          </div>
 
-          {/* UNIDADES */}
-          {tab==="UNIDADES"&&(
-            <div style={{padding:14,maxWidth:560}}>
-              <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:12}}>// BASE DE DATOS DE UNIDADES</div>
-              {units.map(u=>(
-                <div key={u.id} className="panel" style={{borderRadius:2,padding:10,marginBottom:7,borderLeft:`2px solid ${FACTION_COLORS[u.faction]||C.muted}`}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                    <span style={{fontWeight:700,fontSize:13,letterSpacing:2,color:FACTION_COLORS[u.faction]||C.text,flex:1,textTransform:"uppercase"}}>{u.name}</span>
-                    <span className="tag" style={{background:"rgba(56,189,248,0.12)",color:C.blue,border:`1px solid #0c4a6e`,fontSize:10}}>{BASES[u.baseType].label.toUpperCase()} {sizeLabel(u.baseSize)}</span>
-                  </div>
-                  <div style={{display:"flex",gap:4}}>
-                    {Object.entries(AURA_TYPES).map(([key,{label,color}])=>{
-                      const active=u.auras[key],val=u[key];
-                      const[r,g,b]=h2p(color);
-                      return(
-                        <div key={key} style={{flex:1,textAlign:"center",opacity:active?1:0.3}}>
-                          <div style={{fontSize:10,fontWeight:700,letterSpacing:1,color:active?color:C.muted,marginBottom:3}}>{label}</div>
-                          <div style={{background:active?`rgba(${r},${g},${b},0.12)`:C.bg,border:`1px solid ${active?color:C.border}`,borderRadius:2,padding:"5px 2px"}}>
-                            <span style={{fontSize:13,fontWeight:700,color:active?color:C.muted}}>{active?`${val}"`:"-"}</span>
+          {/* Listas de unidades */}
+          {Object.keys(playerPatrols).length>0&&(
+            <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(players.filter(p=>playerPatrols[p.id]).length,2)},1fr)`,gap:10}}>
+              {players.filter(p=>playerPatrols[p.id]).map(p=>{
+                const patrol=playerPatrols[p.id];
+                const status=unitStatus[p.id]||{};
+                const fc=FACTION_COLORS[patrol.faction_keyword]||C.blue;
+                const stats=gameStats[p.id]||{};
+                return(
+                  <div key={p.id}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 10px",background:C.panel,borderRadius:2,borderLeft:`3px solid ${p.color}`}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:12,fontWeight:700,color:p.color,letterSpacing:1}}>{p.name}</div>
+                        <div style={{fontSize:11,color:fc}}>{patrol.patrol_name}</div>
+                      </div>
+                      <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                        <span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:9}}>{stats.deployed||0} en juego</span>
+                        <span className="tag" style={{color:C.muted,background:C.bg,fontSize:9}}>{stats.pending||0} pend.</span>
+                        {(stats.eliminated||0)>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:9}}>{stats.eliminated} bajas</span>}
+                      </div>
+                    </div>
+                    {patrol.faction_ability&&(
+                      <div style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:6,borderLeft:`2px solid ${fc}44`,fontSize:10,color:C.muted}}>
+                        <span style={{color:fc,fontWeight:700,marginRight:5}}>{patrol.faction_ability.name}</span>
+                        {patrol.faction_ability.description}
+                      </div>
+                    )}
+                    <div>
+                      {(patrol.units||[]).map(unit=>{
+                        const unitSt=status[unit.id]||"pending";
+                        const isSel=selUnit?.playerId===p.id&&selUnit?.unitId===unit.id;
+                        return(
+                          <UnitRow key={unit.id} unit={{...unit,faction_keyword:patrol.faction_keyword}} status={unitSt} playerColor={p.color} selected={isSel}
+                            onClick={()=>setSelUnit(isSel?null:{playerId:p.id,unitId:unit.id})}
+                            onDeploy={()=>deployUnit(p.id,unit,patrol)}
+                            onEliminate={()=>eliminateUnit(p.id,unit.id)}/>
+                        );
+                      })}
+                    </div>
+                    {patrol.stratagems?.length>0&&(
+                      <div style={{marginTop:8}}>
+                        <div style={{fontSize:10,color:C.muted,letterSpacing:2,marginBottom:5}}>ESTRATAGEMAS</div>
+                        {patrol.stratagems.map(s=>(
+                          <div key={s.name} style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:3,borderLeft:"2px solid #38bdf844"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+                              <span style={{fontSize:10,fontWeight:700,color:C.blue}}>{s.name}</span>
+                              <span className="tag" style={{color:C.blue,background:"rgba(56,189,248,.1)",fontSize:8}}>{s.cost_cp}CP</span>
+                            </div>
+                            <div style={{fontSize:9,color:C.muted,lineHeight:1.3}}>{s.effect}</div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
-
-          {/* CONFIG */}
-          {tab==="CONFIG"&&(
-            <div style={{padding:14,maxWidth:480}}>
-              <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:12}}>// PARÁMETROS DEL SISTEMA</div>
-              <div className="panel" style={{borderRadius:2,padding:16,marginBottom:10}}>
-                <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:12}}>JUEGO ACTIVO</div>
-                <div style={{marginBottom:12}}>
-                  <label style={{color:C.muted,fontSize:10,letterSpacing:1,display:"block",marginBottom:6}}>SISTEMA DE JUEGO</label>
-                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                    {[["wh40k","WH 40K"],["age_of_sigmar","AOS"],["kill_team","KILL TEAM"],["warcry","WARCRY"],["the_old_world","OLD WORLD"],["necromunda","NECROMUNDA"]].map(([key,label])=>(
-                      <button key={key} className={`rb ${activeGame===key?"on":""}`}
-                        onClick={()=>{setActiveGame(key);setActiveMode(Object.keys(GAME_MODES[key])[0]);}}
-                        style={{padding:"4px 10px",borderRadius:2,fontSize:11,letterSpacing:1}}>{label}</button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{marginBottom:12}}>
-                  <label style={{color:C.muted,fontSize:10,letterSpacing:1,display:"block",marginBottom:6}}>MODO DE JUEGO</label>
-                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                    {Object.entries(GAME_MODES[activeGame]).map(([key,{label}])=>(
-                      <button key={key} className={`rb ${activeMode===key?"bon":""}`} onClick={()=>setActiveMode(key)}
-                        style={{padding:"4px 10px",borderRadius:2,fontSize:11,letterSpacing:1}}>{label}</button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{background:C.bg,borderRadius:2,padding:10,border:`1px solid ${C.border}`}}>
-                  <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
-                    <div>
-                      <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:3}}>TABLERO</div>
-                      <div style={{fontSize:14,fontWeight:700,color:C.blue}}>{GAME_MODES[activeGame][activeMode].w}" × {GAME_MODES[activeGame][activeMode].h}"</div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:3}}>ESCALA X</div>
-                      <div style={{fontSize:14,fontWeight:700,color:C.blue}}>{(1000/GAME_MODES[activeGame][activeMode].w).toFixed(1)} px/inch</div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:3}}>ESCALA Y</div>
-                      <div style={{fontSize:14,fontWeight:700,color:C.blue}}>{(1000/GAME_MODES[activeGame][activeMode].h).toFixed(1)} px/inch</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          {Object.keys(playerPatrols).length===0&&(
+            <div style={{padding:"40px 20px",textAlign:"center",color:C.muted,fontSize:11,letterSpacing:1}}>
+              Selecciona un modo de juego y elige la patrulla de cada jugador para comenzar
             </div>
           )}
         </div>
-      );
-    }
+      )}
 
-    ReactDOM.render(React.createElement(App), document.getElementById('root'));
-  </script>
+      {/* ══ CONFIG ══ */}
+      {tab==="CONFIG"&&(
+        <div style={{padding:14,maxWidth:560}}>
+          <div style={{color:C.muted,fontSize:11,letterSpacing:2,marginBottom:12}}>// CONFIGURACIÓN</div>
+          <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>ANTHROPIC API KEY</div>
+            <div style={{fontSize:10,color:C.muted,marginBottom:8,lineHeight:1.4}}>Necesaria para importar Combat Patrols desde PDF. Solo se guarda en memoria.</div>
+            <div style={{display:"flex",gap:6}}>
+              <input type={showApiKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..."
+                style={{flex:1,background:C.bg,border:`1px solid ${apiKey?C.green:C.border}`,borderRadius:2,padding:"6px 10px",color:C.text,fontFamily:"'Share Tech Mono',monospace",fontSize:12,outline:"none"}}/>
+              <button className="rb" onClick={()=>setShowApiKey(v=>!v)} style={{padding:"6px 10px",fontSize:11}}>{showApiKey?"OCULTAR":"VER"}</button>
+            </div>
+            {apiKey&&<div style={{marginTop:5,fontSize:10,color:C.green}}>✓ API key configurada</div>}
+          </div>
+          <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>IMPORTAR COMBAT PATROL (PDF)</div>
+            <div style={{fontSize:10,color:C.muted,marginBottom:10,lineHeight:1.4}}>Sube el PDF oficial de una Combat Patrol. Claude extraerá automáticamente unidades, armas, habilidades y estratagemas.</div>
+            <div className={`drop-zone ${dragOver?"drag-over":""}`} onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} onDrop={handleDrop} onClick={()=>fileRef.current?.click()}>
+              {pdfLoading?(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}><div className="spin" style={{fontSize:22}}>⟳</div><div style={{fontSize:11,color:C.blue}}>Procesando con Claude...</div></div>):(<div><div style={{fontSize:18,marginBottom:5}}>📄</div><div style={{fontSize:11,color:C.muted}}>Arrastra un PDF o haz clic para seleccionar</div></div>)}
+            </div>
+            <input ref={fileRef} type="file" accept="application/pdf" onChange={handleFileInput}/>
+            {pdfStatus&&(<div style={{marginTop:8,padding:"7px 10px",borderRadius:2,fontSize:11,background:pdfStatus.type==="error"?"rgba(244,63,94,.1)":pdfStatus.type==="success"?"rgba(34,197,94,.1)":"rgba(56,189,248,.1)",border:`1px solid ${pdfStatus.type==="error"?C.red:pdfStatus.type==="success"?C.green:C.blue}`,color:pdfStatus.type==="error"?C.red:pdfStatus.type==="success"?C.green:C.blue}}>{pdfStatus.msg}</div>)}
+          </div>
+          <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>MARCADORES ARUCO — CALIBRACIÓN DE CÁMARA</div>
+            <div style={{fontSize:10,color:C.muted,marginBottom:10,lineHeight:1.4}}>Genera marcadores ArUco temáticos por facción para las 4 esquinas del tablero. La cámara cenital los detecta automáticamente para calibrar posición y escala en tiempo real.</div>
+            <ArucoGenerator/>
+          </div>
+          <div className="panel" style={{borderRadius:2,padding:14}}>
+            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>PATRULLAS DISPONIBLES ({patrols.length})</div>
+            {patrols.map(p=>{const fc=FACTION_COLORS[p.faction_keyword]||C.blue;return(
+              <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:C.bg,borderRadius:2,marginBottom:3,borderLeft:`2px solid ${fc}`}}>
+                <div style={{width:5,height:5,borderRadius:"50%",background:fc,flexShrink:0}}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,color:C.text,fontWeight:700}}>{p.patrol_name}</div>
+                  <div style={{fontSize:9,color:C.muted}}>{p.faction} · {p.system} · {p.game_mode}</div>
+                </div>
+                <span style={{fontSize:9,color:fc}}>{p.units?.length||0} uds</span>
+                {!EMBEDDED_PATROLS.find(e=>e.id===p.id)&&(<button onClick={()=>setPatrols(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"1px 6px",fontSize:10,color:C.red,borderColor:C.red}}>✕</button>)}
+              </div>
+            );})}
+          </div>
+        </div>
+      )}
+
+      {/* Leyenda */}
+      {showLegend&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(5,13,26,.9)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50}} onClick={()=>setShowLegend(false)}>
+          <div className="panel fade-in" style={{borderRadius:4,padding:22,width:360,borderColor:C.blue}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <span style={{color:C.blue,fontWeight:700,letterSpacing:2,fontSize:13}}>// ÍNDICE DE AURAS</span>
+              <button onClick={()=>setShowLegend(false)} className="rb" style={{padding:"2px 8px",fontSize:12}}>✕</button>
+            </div>
+            {[{label:"M — MOVIMIENTO",color:C.green,desc:"Radio de movimiento en pulgadas."},{label:"C — CARGA",color:C.purple,desc:"Alcance de carga estimado (M + 7\" media de 2D6)."},{label:"AD — ARMA DIST.",color:C.blue,desc:"Alcance del arma de mayor rango."},{label:"HAB — HABILIDADES",color:C.yellow,desc:"Auras de habilidades (Sinapsis, Fortune, Omni-scramblers…)"}].map(({label,color,desc})=>(
+              <div key={label} style={{marginBottom:8,padding:10,background:C.bg,borderRadius:2,borderLeft:`3px solid ${color}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><div style={{width:7,height:7,borderRadius:"50%",background:color}}/><span style={{fontWeight:700,fontSize:12,color,letterSpacing:1}}>{label}</span></div>
+                <p style={{fontSize:10,color:C.muted,lineHeight:1.4}}>{desc}</p>
+              </div>
+            ))}
+            <div style={{fontSize:10,color:C.muted,textAlign:"center",marginTop:6}}>CLIC FUERA PARA CERRAR</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
 </body>
 </html>
-
