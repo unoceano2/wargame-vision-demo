@@ -585,6 +585,7 @@ function App(){
   const [pan,setPan]=useState({x:0,y:0});
   const isPanning=useRef(false);
   const lastPan=useRef({x:0,y:0});
+  const [selUnit,setSelUnit]=useState(null);
   const [patrols,setPatrols]=useState(EMBEDDED_PATROLS);
   // Overlays personalizados (logos, imágenes)
   const [overlays,setOverlays]=useState([]);
