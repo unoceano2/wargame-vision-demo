@@ -286,7 +286,7 @@ function renderArucoMarker(canvas,faction,id){
   ctx.fillText(`ID:${id}`,SZ-5,SZ-3);
 }
 
-function OverlayManager({overlays,setOverlays}){
+function OverlayManager({overlays,setOverlays,players}){
   const fileRef=useRef(null);
   const [selId,setSelId]=useState(null);
 
@@ -298,9 +298,8 @@ function OverlayManager({overlays,setOverlays}){
       setOverlays(prev=>[...prev,{
         id,name:file.name.replace(/\.[^.]+$/,""),
         src:ev.target.result,
-        x:0.5,y:0.5,  // centro del tablero (0-1)
-        w:20,h:20,     // % del ancho/alto del tablero
-        opacity:80,
+        playerId:null, // null = todas las minis
+        opacity:70,
         visible:true,
       }]);
       setSelId(id);
@@ -358,23 +357,34 @@ function OverlayManager({overlays,setOverlays}){
           <div style={{fontSize:10,color:C.accent,letterSpacing:2,marginBottom:8}}>
             AJUSTAR — {sel.name.toUpperCase()}
           </div>
-          {[
-            {label:"POS X",key:"x",min:0,max:1,step:0.01,fmt:v=>`${Math.round(v*100)}%`},
-            {label:"POS Y",key:"y",min:0,max:1,step:0.01,fmt:v=>`${Math.round(v*100)}%`},
-            {label:"ANCHO",key:"w",min:2,max:100,step:1,fmt:v=>`${v}%`},
-            {label:"ALTO", key:"h",min:2,max:100,step:1,fmt:v=>`${v}%`},
-            {label:"OPACIDAD",key:"opacity",min:5,max:100,step:5,fmt:v=>`${v}%`},
-          ].map(({label,key,min,max,step,fmt})=>(
-            <div key={key} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-              <span style={{fontSize:9,color:C.muted,letterSpacing:1,width:52,flexShrink:0}}>{label}</span>
-              <input type="range" min={min} max={max} step={step} value={sel[key]}
-                onChange={e=>update(sel.id,key,parseFloat(e.target.value))}
-                style={{flex:1,accentColor:C.accent,height:3}}/>
-              <span style={{fontSize:9,color:C.text,width:32,textAlign:"right",flexShrink:0}}>
-                {fmt(sel[key])}
-              </span>
+          {/* Selector jugador */}
+          <div style={{marginBottom:8}}>
+            <div style={{fontSize:9,color:C.muted,letterSpacing:1,marginBottom:5}}>MOSTRAR EN MINIS DE</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              <button onClick={()=>update(sel.id,"playerId",null)}
+                style={{padding:"3px 8px",background:sel.playerId===null?"rgba(56,189,248,.1)":"transparent",
+                  border:`1px solid ${sel.playerId===null?C.blue:C.border}`,borderRadius:2,cursor:"pointer",
+                  color:sel.playerId===null?C.blue:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:9,fontWeight:700}}>
+                TODOS
+              </button>
+              {players.map(p=>(
+                <button key={p.id} onClick={()=>update(sel.id,"playerId",p.id)}
+                  style={{padding:"3px 8px",background:sel.playerId===p.id?`rgba(${h2rgb(p.color)},.1)`:"transparent",
+                    border:`1px solid ${sel.playerId===p.id?p.color:C.border}`,borderRadius:2,cursor:"pointer",
+                    color:sel.playerId===p.id?p.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:9,fontWeight:700}}>
+                  {p.name}
+                </button>
+              ))}
             </div>
-          ))}
+          </div>
+          {/* Opacidad */}
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:9,color:C.muted,letterSpacing:1,width:52,flexShrink:0}}>OPACIDAD</span>
+            <input type="range" min={10} max={100} step={5} value={sel.opacity}
+              onChange={e=>update(sel.id,"opacity",parseFloat(e.target.value))}
+              style={{flex:1,accentColor:C.accent,height:3}}/>
+            <span style={{fontSize:9,color:C.text,width:32,textAlign:"right",flexShrink:0}}>{sel.opacity}%</span>
+          </div>
         </div>
       )}
 
@@ -646,21 +656,45 @@ function App(){
     for(let x=0;x<=W;x+=W/BW){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
     for(let y=0;y<=H;y+=H/BH){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
     if(activeZone)drawDeploymentZone(ctx,W,H,BW,BH,activeZone);
-    [[0,0],[W,0],[0,H],[W,H]].forEach(([x,y])=>{const s=16,ox=x===0?1:-1,oy=y===0?1:-1;ctx.strokeStyle=C.accent;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x+ox*s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+oy*s);ctx.stroke();});
+    // Borde completo del tablero
+    ctx.strokeStyle=C.accent;ctx.lineWidth=1.5;
+    ctx.strokeRect(0,0,W,H);
+    // Esquinas decorativas encima del borde
+    [[0,0],[W,0],[0,H],[W,H]].forEach(([x,y])=>{
+      const s=20,ox=x===0?1:-1,oy=y===0?1:-1;
+      ctx.strokeStyle=C.accent;ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(x+ox*s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+oy*s);ctx.stroke();
+    });
     minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,W,H,BW,selMini===mini.id,t,activeAuras);});
-    // Overlays personalizados
+    // Overlays personalizados — se proyectan en el aura de movimiento de cada mini del jugador
     overlays.forEach(ov=>{
       if(!ov.visible||!ov.src)return;
       let img=overlayImgCache.current[ov.id];
       if(!img){img=new Image();img.src=ov.src;overlayImgCache.current[ov.id]=img;}
       if(!img.complete)return;
-      const ox=ov.x*W, oy=ov.y*H;
-      const ow=(ov.w/100)*W, oh=(ov.h/100)*H;
-      ctx.save();
-      ctx.globalAlpha=ov.opacity/100;
-      ctx.drawImage(img,ox-ow/2,oy-oh/2,ow,oh);
-      ctx.globalAlpha=1;
-      ctx.restore();
+      const inchPx=W/modeInfo.w;
+      // Dibujar sobre cada mini del jugador asignado (o todas si no hay jugador)
+      minis.forEach(mini=>{
+        if(ov.playerId && mini.playerId!==ov.playerId)return;
+        const unit=mini.unitData;if(!unit)return;
+        const cx=mini.x*W,cy=mini.y*H;
+        const mv=parseInt(unit.stats?.M)||6;
+        const bsz=(unit.base_size_mm/2/25.4)*inchPx;
+        const rad=(mv*inchPx+bsz); // radio del aura de movimiento
+        const player=players.find(p=>p.id===mini.playerId);
+        const col=player?.color||C.accent;
+        ctx.save();
+        ctx.globalAlpha=(ov.opacity/100)*0.6;
+        // Círculo coloreado de fondo con el color del jugador
+        const [r,g,b]=h2p(col);
+        ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${r},${g},${b},0.08)`;ctx.fill();
+        // Imagen centrada en el aura
+        const size=rad*1.2;
+        ctx.drawImage(img,cx-size/2,cy-size/2,size,size);
+        ctx.globalAlpha=1;
+        ctx.restore();
+      });
     });
     ctx.restore();
   },[tab,minis,players,selMini,tick,activeAuras,activeZone,modeInfo,zoom,pan,overlays]);
@@ -685,6 +719,26 @@ function App(){
 
   // Reset zoom
   const resetZoom=()=>{setZoom(1);setPan({x:0,y:0});};
+
+  // Pan con drag (cuando no hay mini seleccionada)
+  const handleMouseDown=(e)=>{
+    if(selMini)return;
+    isPanning.current=true;
+    lastPan.current={x:e.clientX-pan.x*(canvasRef.current.getBoundingClientRect().width/canvasRef.current.width),
+                     y:e.clientY-pan.y*(canvasRef.current.getBoundingClientRect().height/canvasRef.current.height)};
+  };
+  const handleMouseMove=(e)=>{
+    if(e.buttons===1&&selMini){handleCanvasDrag(e);return;}
+    if(!isPanning.current||!e.buttons)return;
+    const rect=canvasRef.current.getBoundingClientRect();
+    const scaleX=canvasRef.current.width/rect.width;
+    const scaleY=canvasRef.current.height/rect.height;
+    setPan({
+      x:(e.clientX-lastPan.current.x)*scaleX,
+      y:(e.clientY-lastPan.current.y)*scaleY,
+    });
+  };
+  const handleMouseUp=()=>{isPanning.current=false;};
 
   const handleCanvasClick=(e)=>{
     const rect=canvasRef.current.getBoundingClientRect();
@@ -827,9 +881,14 @@ function App(){
             <div style={{position:"relative"}}>
               <canvas ref={canvasRef} width={700} height={520}
                 onClick={handleCanvasClick}
-                onMouseMove={e=>{if(e.buttons===1&&selMini)handleCanvasDrag(e);}}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
                 onWheel={handleWheel}
-                style={{borderRadius:2,border:`1px solid ${C.border}`,cursor:selMini?"grabbing":"crosshair",display:"block",width:"100%",height:"auto"}}/>
+                style={{borderRadius:2,border:`1px solid ${C.border}`,
+                  cursor:selMini?"grabbing":isPanning.current?"grabbing":"grab",
+                  display:"block",width:"100%",height:"auto"}}/>
               {assignMenu&&(
                 <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
                   <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
@@ -1038,7 +1097,7 @@ function App(){
             <div style={{fontSize:10,color:C.muted,marginBottom:10,lineHeight:1.4}}>
               Proyecta logos, emblemas o cualquier imagen sobre el tablero. Útil para logos de tienda, emblemas de facción o marcadores personalizados.
             </div>
-            <OverlayManager overlays={overlays} setOverlays={setOverlays}/>
+            <OverlayManager overlays={overlays} setOverlays={setOverlays} players={players}/>
           </div>
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
             <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>MARCADORES ARUCO — CALIBRACIÓN DE CÁMARA</div>
