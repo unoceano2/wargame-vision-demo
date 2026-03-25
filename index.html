@@ -399,7 +399,8 @@ function OverlayManager({overlays,setOverlays}){
 
 function ArucoGenerator(){
   const [selFaction,setSelFaction]=useState(ARUCO_FACTIONS[0]);
-  const canvasRefs=[useRef(null),useRef(null),useRef(null),useRef(null)];
+  const cr0=useRef(null),cr1=useRef(null),cr2=useRef(null),cr3=useRef(null);
+  const canvasRefs=[cr0,cr1,cr2,cr3];
 
   useEffect(()=>{
     canvasRefs.forEach((ref,i)=>{
