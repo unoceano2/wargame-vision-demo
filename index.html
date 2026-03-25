@@ -488,39 +488,78 @@ function StatusBadge({status}){
   return <span style={{fontSize:12,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:s.color,background:s.bg,border:`1px solid ${s.color}44`}}>{s.label}</span>;
 }
 
-function UnitRow({unit,status,playerColor,onDeploy,onEliminate,selected,onClick}){
+function UnitRow({unit,unitSt,playerColor,onDeploy,onEliminate,selected,onClick}){
+  // unitSt = {deployed, eliminated, total}
+  const st=unitSt||{deployed:0,eliminated:0,total:unit.count||1};
+  const pending=Math.max(0,st.total-st.deployed-st.eliminated);
+  const allEliminated=st.eliminated>=st.total;
+  const allDeployed=st.deployed+st.eliminated>=st.total;
   const maxRange=Math.max(0,...(unit.ranged_weapons||[]).map(w=>w.range_inches||0));
+  const isMulti=st.total>1;
+
+  // Estado visual de la fila
+  const rowStatus=allEliminated?"eliminated":st.deployed>0||allDeployed?"deployed":"pending";
+
   return(
-    <div className={`unit-row ${status} ${selected?"selected-unit":""}`} onClick={onClick}
-      style={{borderLeft:`3px solid ${status==="eliminated"?"#f43f5e44":status==="deployed"?C.green:playerColor||C.muted}`}}>
+    <div className={`unit-row ${rowStatus} ${selected?"selected-unit":""}`} onClick={onClick}
+      style={{borderLeft:`3px solid ${allEliminated?"#f43f5e44":st.deployed>0?C.green:playerColor||C.muted}`}}>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         <div style={{flex:1}}>
-          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
-            <span style={{fontWeight:700,fontSize:13,letterSpacing:1,color:status==="eliminated"?C.muted:playerColor||C.text}}>{unit.name}</span>
-            <span style={{fontSize:11,color:C.muted}}>×{unit.count}</span>
-            <StatusBadge status={status}/>
+          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3,flexWrap:"wrap"}}>
+            <span style={{fontWeight:700,fontSize:13,letterSpacing:1,
+              color:allEliminated?C.muted:playerColor||C.text}}>{unit.name}</span>
+            {/* Contador de figuras */}
+            {isMulti?(
+              <span style={{fontSize:11,color:C.muted,letterSpacing:1}}>
+                <span style={{color:C.green}}>{st.deployed}</span>
+                <span style={{color:C.muted}}>/{st.total}</span>
+                {st.eliminated>0&&<span style={{color:C.red}}> (-{st.eliminated})</span>}
+              </span>
+            ):(
+              <span style={{fontSize:11,color:C.muted}}>×1</span>
+            )}
+            {/* Badge de estado */}
+            {allEliminated&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.red,background:"rgba(244,63,94,0.1)",border:"1px solid #f43f5e44"}}>ELIMINADA</span>}
+            {!allEliminated&&allDeployed&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.green,background:"rgba(34,197,94,0.1)",border:"1px solid #22c55e44"}}>EN JUEGO</span>}
+            {!allEliminated&&!allDeployed&&st.deployed>0&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.yellow,background:"rgba(251,191,36,0.1)",border:"1px solid #fbbf2444"}}>PARCIAL</span>}
+            {!allEliminated&&!allDeployed&&st.deployed===0&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.muted,background:"transparent",border:"1px solid #3a5a7a44"}}>PENDIENTE</span>}
           </div>
           <div style={{display:"flex",gap:9,fontSize:11,color:C.muted}}>
-            <span>M:{unit.stats.M}</span><span>T:{unit.stats.T}</span><span>SV:{unit.stats.SV}</span><span>W:{unit.stats.W}</span>
+            <span>M:{unit.stats.M}</span><span>T:{unit.stats.T}</span>
+            <span>SV:{unit.stats.SV}</span><span>W:{unit.stats.W}</span>
             {maxRange>0&&<span style={{color:"#38bdf877"}}>AD:{maxRange}"</span>}
           </div>
         </div>
-        <div style={{display:"flex",gap:4,flexShrink:0}}>
-          {status==="pending"&&<button onClick={e=>{e.stopPropagation();onDeploy();}} className="rb gon" style={{padding:"4px 10px",fontSize:11}}>▶ DESPLEGAR</button>}
-          {status==="deployed"&&<button onClick={e=>{e.stopPropagation();onEliminate();}} className="rb ron" style={{padding:"4px 10px",fontSize:11}}>✕ ELIMINAR</button>}
-          {status==="eliminated"&&<span style={{fontSize:11,color:C.muted}}>BAJA</span>}
-        </div>
+        {/* Botones */}
+        {!allEliminated&&(
+          <div style={{display:"flex",gap:4,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
+            {pending>0&&(
+              <button onClick={e=>{e.stopPropagation();onDeploy();}}
+                className="rb gon" style={{padding:"4px 10px",fontSize:11,whiteSpace:"nowrap"}}>
+                {isMulti?`▶ +FIGURA (${pending})`:"▶ DESPLEGAR"}
+              </button>
+            )}
+            {st.deployed>0&&(
+              <button onClick={e=>{e.stopPropagation();onEliminate();}}
+                className="rb ron" style={{padding:"3px 8px",fontSize:11,whiteSpace:"nowrap"}}>
+                {isMulti?"✕ -FIGURA":"✕ ELIMINAR"}
+              </button>
+            )}
+          </div>
+        )}
+        {allEliminated&&<span style={{fontSize:11,color:C.muted,flexShrink:0}}>BAJA</span>}
       </div>
-      {selected&&status!=="eliminated"&&(
+      {selected&&!allEliminated&&(
         <div style={{marginTop:5,display:"flex",flexWrap:"wrap",gap:2}}>
           {(unit.abilities||[]).filter(a=>a.aura).map(a=>(
-            <span key={a.name} className="aura-badge" style={{background:`rgba(${h2rgb(a.aura.color||"#fbbf24")},.1)`,color:a.aura.color||"#fbbf24",border:`1px solid ${a.aura.color||"#fbbf24"}33`}}>
+            <span key={a.name} className="aura-badge"
+              style={{background:`rgba(${h2rgb(a.aura.color||"#fbbf24")},.1)`,
+                color:a.aura.color||"#fbbf24",border:`1px solid ${a.aura.color||"#fbbf24"}33`}}>
               {a.aura.radius_inches>0?`${a.aura.radius_inches}" `:""}
               {a.aura.display_text}
             </span>
           ))}
           {unit.damaged_profile&&<span className="aura-badge" style={{color:C.red,background:"rgba(244,63,94,.1)",border:"1px solid #f43f5e33"}}>DAÑADO: {unit.damaged_profile.effect}</span>}
-          {unit.patrol_squads&&<span className="aura-badge" style={{color:C.blue,background:"rgba(56,189,248,.1)",border:"1px solid #38bdf833"}}>ESCUADRA PATRULLA</span>}
         </div>
       )}
     </div>
@@ -632,25 +671,51 @@ function App(){
 
   const selectPatrol=(playerId,patrol)=>{
     setPlayerPatrols(prev=>({...prev,[playerId]:patrol}));
-    const initial={};(patrol.units||[]).forEach(u=>{initial[u.id]="pending";});
+    // Estado por unidad: {deployed: 0, eliminated: 0, total: count}
+    const initial={};
+    (patrol.units||[]).forEach(u=>{
+      initial[u.id]={deployed:0,eliminated:0,total:u.count||1};
+    });
     setUnitStatus(prev=>({...prev,[playerId]:initial}));
     setMinis(prev=>prev.filter(m=>m.playerId!==playerId));
   };
 
   const deployUnit=(playerId,unit,patrol)=>{
-    const newMini={id:`mini_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,unitData:{...unit,faction_keyword:patrol.faction_keyword},x:playerId===1?0.1+Math.random()*0.15:0.75+Math.random()*0.15,y:0.1+Math.random()*0.8,playerId};
+    const st=unitStatus[playerId]?.[unit.id]||{deployed:0,eliminated:0,total:unit.count||1};
+    if(st.deployed>=st.total)return; // ya todas desplegadas
+    // Cada figura tiene su propio id único en el tablero
+    const figIdx=st.deployed; // índice de esta figura
+    const newMini={
+      id:`mini_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+      unitData:{...unit,faction_keyword:patrol.faction_keyword},
+      figureIndex:figIdx,
+      x:playerId===1?0.05+Math.random()*0.18:0.77+Math.random()*0.18,
+      y:0.05+Math.random()*0.9,
+      playerId,
+    };
     setMinis(prev=>[...prev,newMini]);
-    setUnitStatus(prev=>({...prev,[playerId]:{...prev[playerId],[unit.id]:"deployed"}}));
+    setUnitStatus(prev=>({
+      ...prev,
+      [playerId]:{
+        ...prev[playerId],
+        [unit.id]:{...st,deployed:st.deployed+1},
+      }
+    }));
   };
 
-  const eliminateUnit=(playerId,unitId)=>{
-    setMinis(prev=>prev.filter(m=>!(m.playerId===playerId&&m.unitData?.id===unitId)));
-    setUnitStatus(prev=>({...prev,[playerId]:{...prev[playerId],[unitId]:"eliminated"}}));
+  const eliminateUnit=(playerId,unitId,miniId)=>{
+    // Eliminar la mini específica del tablero
+    setMinis(prev=>prev.filter(m=>m.id!==miniId));
+    // Incrementar contador de eliminadas
+    setUnitStatus(prev=>{
+      const st=prev[playerId]?.[unitId]||{deployed:1,eliminated:0,total:1};
+      return{...prev,[playerId]:{...prev[playerId],[unitId]:{...st,deployed:Math.max(0,st.deployed-1),eliminated:st.eliminated+1}}};
+    });
   };
 
   const removeMiniById=(miniId)=>{
     const mini=minis.find(m=>m.id===miniId);
-    if(mini&&mini.playerId&&mini.unitData)eliminateUnit(mini.playerId,mini.unitData.id);
+    if(mini&&mini.playerId&&mini.unitData)eliminateUnit(mini.playerId,mini.unitData.id,miniId);
     else setMinis(prev=>prev.filter(m=>m.id!==miniId));
     setSelMini(null);setAssignMenu(null);
   };
@@ -809,7 +874,26 @@ function App(){
 
   const gameStats=useMemo(()=>{
     const stats={};
-    players.forEach(p=>{const patrol=playerPatrols[p.id];const status=unitStatus[p.id]||{};const units=patrol?.units||[];stats[p.id]={total:units.length,pending:units.filter(u=>status[u.id]==="pending").length,deployed:units.filter(u=>status[u.id]==="deployed").length,eliminated:units.filter(u=>status[u.id]==="eliminated").length};});
+    players.forEach(p=>{
+      const patrol=playerPatrols[p.id];
+      const status=unitStatus[p.id]||{};
+      const units=patrol?.units||[];
+      let totalFigs=0,deployedFigs=0,eliminatedFigs=0,pendingFigs=0;
+      units.forEach(u=>{
+        const st=status[u.id]||{deployed:0,eliminated:0,total:u.count||1};
+        totalFigs+=st.total;
+        deployedFigs+=st.deployed;
+        eliminatedFigs+=st.eliminated;
+        pendingFigs+=(st.total-st.deployed-st.eliminated);
+      });
+      stats[p.id]={
+        total:totalFigs,
+        deployed:deployedFigs,
+        eliminated:eliminatedFigs,
+        pending:pendingFigs,
+        units:units.length,
+      };
+    });
     return stats;
   },[players,playerPatrols,unitStatus]);
 
@@ -1092,13 +1176,16 @@ function App(){
                     )}
                     <div>
                       {(patrol.units||[]).map(unit=>{
-                        const unitSt=status[unit.id]||"pending";
+                        const unitSt=status[unit.id]||{deployed:0,eliminated:0,total:unit.count||1};
                         const isSel=selUnit?.playerId===p.id&&selUnit?.unitId===unit.id;
+                        // Mini más reciente de esta unidad para eliminar
+                        const lastMini=minis.filter(m=>m.playerId===p.id&&m.unitData?.id===unit.id).slice(-1)[0];
                         return(
-                          <UnitRow key={unit.id} unit={{...unit,faction_keyword:patrol.faction_keyword}} status={unitSt} playerColor={p.color} selected={isSel}
+                          <UnitRow key={unit.id} unit={{...unit,faction_keyword:patrol.faction_keyword}}
+                            unitSt={unitSt} playerColor={p.color} selected={isSel}
                             onClick={()=>setSelUnit(isSel?null:{playerId:p.id,unitId:unit.id})}
                             onDeploy={()=>deployUnit(p.id,unit,patrol)}
-                            onEliminate={()=>eliminateUnit(p.id,unit.id)}/>
+                            onEliminate={()=>lastMini&&eliminateUnit(p.id,unit.id,lastMini.id)}/>
                         );
                       })}
                     </div>
