@@ -359,21 +359,151 @@ function drawDeploymentZone(ctx,W,H,BW,BH,zoneKey){
   }
 }
 
-function drawUnit(ctx,mini,unit,playerColor,W,H,BW,selected,t,activeAuras,auraColors){
-  auraColors=auraColors||{move:"#22c55e",charge:"#a855f7",shoot:"#38bdf8",abilities:"#fbbf24"};
+function drawUnit(ctx,mini,unit,playerColor,W,H,BW,selected,t,auraColors){
+  // drawUnit YA NO dibuja auras — las auras se dibujan aparte con fusión
   const cx=mini.x*W,cy=mini.y*H,color=playerColor||"#3a5a7a";
   const [r,g,b]=h2p(color);
   const inchPx=W/BW;
   const bsz=(unit.base_size_mm/2/25.4)*inchPx;
-  if(activeAuras.shoot){const mr=Math.max(0,...(unit.ranged_weapons||[]).map(w=>w.range_inches||0));if(mr>0){const rad=mr*inchPx;ctx.save();ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.strokeStyle=auraColors.shoot;ctx.lineWidth=1;ctx.setLineDash([3,5]);ctx.shadowColor=auraColors.shoot;ctx.shadowBlur=4;ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.font="bold 9px 'Rajdhani',monospace";ctx.fillStyle=auraColors.shoot;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(`AD ${mr}"`,cx,cy-(bsz+rad)-6);ctx.restore();}}
-  if(activeAuras.move){const mv=parseInt(unit.stats.M)||6;const rad=mv*inchPx;ctx.save();ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.strokeStyle=auraColors.move;ctx.lineWidth=1.5;ctx.shadowColor=auraColors.move;ctx.shadowBlur=selected?10:5;ctx.setLineDash([4,8]);ctx.lineDashOffset=-(t*15)%12;ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.font="bold 9px 'Rajdhani',monospace";ctx.fillStyle=auraColors.move;ctx.textAlign="left";ctx.textBaseline="middle";ctx.fillText(`M ${mv}"`,cx+(bsz+rad)*0.7+3,cy-(bsz+rad)*0.7);ctx.restore();}
-  if(activeAuras.charge){const mv=parseInt(unit.stats.M)||6;const rad=(mv+7)*inchPx;ctx.save();ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.strokeStyle=auraColors.charge;ctx.lineWidth=1;ctx.setLineDash([6,4]);ctx.shadowColor=auraColors.charge;ctx.shadowBlur=3;ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.restore();}
-  if(activeAuras.abilities){(unit.abilities||[]).forEach(ab=>{if(!ab.aura||!ab.aura.radius_inches) return;const rad=ab.aura.radius_inches*inchPx;const col=ab.aura.color||auraColors.abilities;const [ar,ag,ab2]=h2p(col);ctx.save();ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.shadowColor=col;ctx.shadowBlur=8;ctx.stroke();ctx.shadowBlur=0;ctx.beginPath();ctx.arc(cx,cy,bsz+rad,0,Math.PI*2);ctx.fillStyle=`rgba(${ar},${ag},${ab2},0.06)`;ctx.fill();ctx.font="bold 9px 'Rajdhani',monospace";ctx.fillStyle=col;ctx.textAlign="center";ctx.textBaseline="middle";const angle=Math.PI*1.25;ctx.fillText(ab.aura.display_text,cx+(bsz+rad)*Math.cos(angle),cy+(bsz+rad)*Math.sin(angle)-7);ctx.restore();});}
-  ctx.save();ctx.beginPath();if(unit.base_type==="oval")ctx.ellipse(cx,cy,bsz,bsz*0.6,0,0,Math.PI*2);else ctx.arc(cx,cy,bsz,0,Math.PI*2);ctx.fillStyle=`rgba(${r},${g},${b},0.15)`;ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=selected?2:1.2;ctx.shadowColor=color;ctx.shadowBlur=selected?14:7;ctx.stroke();ctx.shadowBlur=0;
-  ctx.fillStyle=color;ctx.font=`bold ${Math.max(9,bsz*0.9)}px 'Rajdhani',monospace`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.shadowColor=color;ctx.shadowBlur=5;ctx.fillText(unit.name[0].toUpperCase(),cx,cy);ctx.shadowBlur=0;
+  ctx.save();ctx.beginPath();if(unit.base_type==="oval")ctx.ellipse(cx,cy,bsz,bsz*0.6,0,0,Math.PI*2);else ctx.arc(cx,cy,bsz,0,Math.PI*2);
+  ctx.fillStyle=`rgba(${r},${g},${b},0.15)`;ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=selected?2:1.2;
+  ctx.shadowColor=color;ctx.shadowBlur=selected?14:7;ctx.stroke();ctx.shadowBlur=0;
+  ctx.fillStyle=color;ctx.font=`bold ${Math.max(9,bsz*0.9)}px 'Rajdhani',monospace`;
+  ctx.textAlign="center";ctx.textBaseline="middle";ctx.shadowColor=color;ctx.shadowBlur=5;
+  ctx.fillText(unit.name[0].toUpperCase(),cx,cy);ctx.shadowBlur=0;
   ctx.font="bold 9px 'Rajdhani',monospace";ctx.fillText(unit.name.split(' ')[0],cx,cy+bsz+4);
   if(!playerColor){ctx.beginPath();ctx.arc(cx+bsz*0.7,cy-bsz*0.7,5,0,Math.PI*2);ctx.fillStyle="#f97316";ctx.shadowColor="#f97316";ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;ctx.fillStyle="#050d1a";ctx.font="bold 7px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",cx+bsz*0.7,cy-bsz*0.7);}
   ctx.restore();
+}
+
+// Dibuja auras fusionadas por tipo — agrupa círculos del mismo radio+color en un canvas offscreen
+// y proyecta solo el contorno exterior resultante
+function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMini){
+  if(!activeAuras.move&&!activeAuras.charge&&!activeAuras.shoot&&!activeAuras.abilities) return;
+  const inchPx=W/BW;
+
+  // Recopila todos los círculos de aura agrupados por (tipo, color, radio)
+  // key = `tipo_colorhex_radio`
+  const groups={};
+
+  const addCircle=(key,cx,cy,rad,color,label,dash,lineW)=>{
+    if(!groups[key])groups[key]={circles:[],color,label,dash,lineW};
+    groups[key].circles.push({cx,cy,rad});
+  };
+
+  minis.forEach(mini=>{
+    const unit=mini.unitData;if(!unit)return;
+    const player=players.find(p=>p.id===mini.playerId);
+    const cx=mini.x*W,cy=mini.y*H;
+    const bsz=(unit.base_size_mm/2/25.4)*inchPx;
+    const mv=parseInt(unit.stats?.M)||6;
+
+    if(activeAuras.shoot){
+      const mr=Math.max(0,...(unit.ranged_weapons||[]).map(w=>w.range_inches||0));
+      if(mr>0) addCircle(`shoot_${auraColors.shoot}_${Math.round(bsz+mr*inchPx)}`,cx,cy,bsz+mr*inchPx,auraColors.shoot,`AD ${mr}"`,true,1);
+    }
+    if(activeAuras.move){
+      const rad=bsz+mv*inchPx;
+      addCircle(`move_${auraColors.move}_${Math.round(rad)}`,cx,cy,rad,auraColors.move,`M ${mv}"`,true,1.5);
+    }
+    if(activeAuras.charge){
+      const rad=bsz+(mv+7)*inchPx;
+      addCircle(`charge_${auraColors.charge}_${Math.round(rad)}`,cx,cy,rad,auraColors.charge,null,true,1);
+    }
+    if(activeAuras.abilities){
+      (unit.abilities||[]).forEach(ab=>{
+        if(!ab.aura||!ab.aura.radius_inches)return;
+        const col=ab.aura.color||auraColors.abilities;
+        const rad=bsz+ab.aura.radius_inches*inchPx;
+        addCircle(`hab_${ab.name}_${col}`,cx,cy,rad,col,ab.aura.display_text,false,1.5);
+      });
+    }
+  });
+
+  // Por cada grupo, dibujar la forma fusionada en un offscreen canvas
+  Object.values(groups).forEach(({circles,color,label,dash,lineW})=>{
+    if(!circles.length)return;
+    const [r,g,b]=h2p(color);
+
+    // Offscreen para calcular la forma fusionada
+    const off=document.createElement('canvas');
+    off.width=W;off.height=H;
+    const octx=off.getContext('2d');
+    // Rellenar todos los círculos en blanco (la unión)
+    octx.fillStyle="#ffffff";
+    circles.forEach(({cx,cy,rad})=>{
+      octx.beginPath();octx.arc(cx,cy,rad,0,Math.PI*2);octx.fill();
+    });
+
+    // Ahora dibujamos: relleno semitransparente + borde exterior
+    ctx.save();
+
+    // Relleno: usar el offscreen como máscara de recorte no es directo en 2D,
+    // así que dibujamos fill de cada círculo con globalAlpha bajo
+    ctx.globalAlpha=0.06;
+    ctx.fillStyle=`rgb(${r},${g},${b})`;
+    circles.forEach(({cx,cy,rad})=>{
+      ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fill();
+    });
+    ctx.globalAlpha=1;
+
+    // Borde exterior: usar el truco de compositing
+    // Creamos un canvas con la forma blanca, luego lo erosionamos para quedarnos con el borde
+    const borderOff=document.createElement('canvas');
+    borderOff.width=W;borderOff.height=H;
+    const bctx=borderOff.getContext('2d');
+
+    // Dibujamos todos los círculos expandidos (borde exterior)
+    bctx.strokeStyle=color;
+    bctx.lineWidth=lineW*2;
+    bctx.fillStyle="#ffffff";
+    circles.forEach(({cx,cy,rad})=>{
+      bctx.beginPath();bctx.arc(cx,cy,rad,0,Math.PI*2);bctx.fill();
+    });
+    // Borrar el interior (erosión): quitamos los píxeles interiores
+    bctx.globalCompositeOperation='destination-out';
+    circles.forEach(({cx,cy,rad})=>{
+      bctx.beginPath();bctx.arc(cx,cy,rad-lineW*2,0,Math.PI*2);bctx.fill();
+    });
+    bctx.globalCompositeOperation='source-over';
+
+    // Colorear el borde resultante
+    bctx.globalCompositeOperation='source-in';
+    if(dash){
+      // Para línea discontinua, dibujar sobre el shape
+      bctx.globalCompositeOperation='source-atop';
+    }
+    bctx.fillStyle=color;
+    bctx.fillRect(0,0,W,H);
+
+    // Proyectar sobre el canvas principal
+    ctx.shadowColor=color;ctx.shadowBlur=6;
+    ctx.drawImage(borderOff,0,0);
+    ctx.shadowBlur=0;
+
+    // Etiqueta en el primer círculo del grupo
+    if(label){
+      const first=circles[0];
+      ctx.font="bold 9px 'Rajdhani',monospace";
+      ctx.fillStyle=color;ctx.textAlign="left";ctx.textBaseline="middle";
+      ctx.fillText(label,first.cx+first.rad*0.7+3,first.cy-first.rad*0.7);
+    }
+
+    // Línea discontinua encima del borde para dar efecto dash
+    if(dash){
+      ctx.globalAlpha=0.9;
+      ctx.strokeStyle=color;ctx.lineWidth=lineW;
+      ctx.setLineDash([5,7]);
+      ctx.lineDashOffset=-(t*15)%12;
+      circles.forEach(({cx,cy,rad})=>{
+        ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      ctx.globalAlpha=1;
+    }
+
+    ctx.restore();
+  });
 }
 
 // ─── ARUCO ───────────────────────────────────────────────────────────────────
@@ -793,7 +923,8 @@ function App(){
   const [selMini,setSelMini]=useState(null);
   const [assignMenu,setAssignMenu]=useState(null);
   const [tab,setTab]=useState("TABLERO");
-  const [activeAuras,setActiveAuras]=useState({move:true,charge:true,shoot:true,abilities:true});
+  const [activeAuras,setActiveAuras]=useState({move:false,charge:false,shoot:false,abilities:false});
+  const prevAuras=useRef({move:true,charge:true,shoot:true,abilities:true});
   const [activeZone,setActiveZone]=useState(null);
   const [showDeployMenu,setShowDeployMenu]=useState(false);
   const [showLegend,setShowLegend]=useState(false);
@@ -905,7 +1036,10 @@ function App(){
       ctx.strokeStyle=C.accent;ctx.lineWidth=3;
       ctx.beginPath();ctx.moveTo(x+ox*s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+oy*s);ctx.stroke();
     });
-    minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,W,H,BW,selMini===mini.id,t,activeAuras,auraColors);});
+    // Auras fusionadas (antes de las minis para que queden debajo)
+    drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMini);
+    // Minis encima
+    minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,W,H,BW,selMini===mini.id,t,auraColors);});
     // Overlays personalizados — se proyectan dentro del aura de movimiento de cada mini
     overlays.forEach(ov=>{
       if(!ov.visible||!ov.src)return;
@@ -1136,6 +1270,17 @@ function App(){
                 </button>);
               })}
               <button onClick={()=>setShowLegend(true)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:C.blue,color:C.blue}}>? ÍNDICE</button>
+              {/* Toggle global auras */}
+              <button onClick={()=>{
+                const anyOn=Object.values(activeAuras).some(Boolean);
+                if(anyOn){prevAuras.current={...activeAuras};setActiveAuras({move:false,charge:false,shoot:false,abilities:false});}
+                else setActiveAuras({...prevAuras.current});
+              }} className="rb" style={{padding:"3px 10px",fontSize:11,
+                borderColor:Object.values(activeAuras).some(Boolean)?"#f43f5e44":C.green,
+                color:Object.values(activeAuras).some(Boolean)?"#f43f5e":C.green,
+                background:Object.values(activeAuras).some(Boolean)?"rgba(244,63,94,0.05)":"rgba(34,197,94,0.05)"}}>
+                {Object.values(activeAuras).some(Boolean)?"◉ OCULTAR":"○ AURAS"}
+              </button>
               <div style={{position:"relative"}} onClick={e=>e.stopPropagation()}>
                 <button onClick={()=>setShowDeployMenu(v=>!v)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:activeZone?C.green:C.border,color:activeZone?C.green:C.muted,background:activeZone?"rgba(34,197,94,.1)":"transparent"}}>
                   ⬡ DESPLIEGUE{activeZone?` — ${DEPLOY_ZONES[activeZone].label}`:""}
