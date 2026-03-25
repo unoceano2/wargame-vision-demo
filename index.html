@@ -10,9 +10,13 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#050d1a;color:#c8dff5;font-family:'Rajdhani',monospace;overflow-x:hidden;font-size:14px;}
-::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:#050d1a;}::-webkit-scrollbar-thumb{background:#0e2a4a;}
-.rb{border:1px solid #0e2a4a;background:transparent;color:#3a5a7a;cursor:pointer;font-family:'Rajdhani',monospace;font-weight:600;letter-spacing:1px;transition:all .2s;font-size:12px;}
+:root{
+  --fs-xs:11px; --fs-sm:12px; --fs-md:13px; --fs-lg:14px; --fs-xl:16px;
+  --lh:1.5;
+}
+body{background:#050d1a;color:#c8dff5;font-family:'Rajdhani',monospace;overflow-x:hidden;font-size:var(--fs-lg);}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#050d1a;}::-webkit-scrollbar-thumb{background:#0e2a4a;}
+.rb{border:1px solid #0e2a4a;background:transparent;color:#3a5a7a;cursor:pointer;font-family:'Rajdhani',monospace;font-weight:600;letter-spacing:1px;transition:all .2s;font-size:var(--fs-md);}
 .rb:hover{border-color:#f97316;color:#f97316;}
 .rb.on{border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.18);}
 .rb.bon{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,0.12);}
@@ -20,22 +24,28 @@ body{background:#050d1a;color:#c8dff5;font-family:'Rajdhani',monospace;overflow-
 .rb.ron{border-color:#f43f5e;color:#f43f5e;background:rgba(244,63,94,0.12);}
 .panel{background:#070f20;border:1px solid #0e2a4a;position:relative;overflow:hidden;}
 .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#f97316,transparent);opacity:.4;}
-.tag{font-size:12px;font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:2px;}
+.tag{font-size:var(--fs-sm);font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:2px;}
+/* Escalar todos los textos inline que se quedan pequeños */
+span,div,p,label{font-size:inherit;}
 .pulse{animation:pulse 2s ease-in-out infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .spin{animation:spin 1s linear infinite;}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .fade-in{animation:fadeIn .25s ease;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
-.unit-row{border:1px solid #0e2a4a;border-radius:2px;padding:9px 12px;margin-bottom:5px;transition:all .2s;background:#050d1a;cursor:pointer;}
+.unit-row{border:1px solid #0e2a4a;border-radius:2px;padding:9px 12px;margin-bottom:5px;transition:all .2s;background:#050d1a;cursor:pointer;font-size:var(--fs-md);}
 .unit-row:hover{border-color:#1e3a5a;}
 .unit-row.deployed{border-color:#22c55e44;background:rgba(34,197,94,0.04);}
 .unit-row.eliminated{border-color:#f43f5e22;background:rgba(244,63,94,0.04);opacity:0.5;}
 .unit-row.selected-unit{border-color:#f97316;background:rgba(249,115,22,0.06);}
-.aura-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:2px;font-size:9px;font-weight:700;letter-spacing:1px;margin:2px;}
-.drop-zone{border:2px dashed #0e2a4a;border-radius:4px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;}
+.aura-badge{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:2px;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;margin:2px;}
+.drop-zone{border:2px dashed #0e2a4a;border-radius:4px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;font-size:var(--fs-md);}
 .drop-zone:hover,.drop-zone.drag-over{border-color:#38bdf8;background:rgba(56,189,248,0.05);}
 input[type=file]{display:none;}
+/* Forzar herencia en todos los contenedores React */
+#root *{font-family:'Rajdhani',monospace;}
+/* Escala mínima — nada por debajo de 11px */
+#root [style*="fontSize: 8"],#root [style*="fontSize: 9"],#root [style*="fontSize: 10"]{font-size:var(--fs-xs) !important;}
 </style>
 </head>
 <body>
@@ -328,7 +338,7 @@ function OverlayManager({overlays,setOverlays,players}){
                 background:"#111",border:`1px solid ${C.border}`}}>
                 <img src={ov.src} style={{width:"100%",height:"100%",objectFit:"contain"}} alt=""/>
               </div>
-              <span style={{flex:1,fontSize:10,color:selId===ov.id?C.accent:C.text,
+              <span style={{flex:1,fontSize:12,color:selId===ov.id?C.accent:C.text,
                 letterSpacing:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {ov.name}
               </span>
@@ -336,12 +346,12 @@ function OverlayManager({overlays,setOverlays,players}){
               <button onClick={e=>{e.stopPropagation();update(ov.id,"visible",!ov.visible);}}
                 style={{padding:"2px 6px",background:"transparent",border:`1px solid ${ov.visible?C.green:C.border}`,
                   borderRadius:2,cursor:"pointer",color:ov.visible?C.green:C.muted,
-                  fontFamily:"'Rajdhani',monospace",fontSize:9,fontWeight:700}}>
+                  fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700}}>
                 {ov.visible?"ON":"OFF"}
               </button>
               <button onClick={e=>{e.stopPropagation();remove(ov.id);}}
                 style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,
-                  borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:10}}
+                  borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:12}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=C.red}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>✕</button>
             </div>
@@ -353,24 +363,24 @@ function OverlayManager({overlays,setOverlays,players}){
       {sel&&(
         <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,
           padding:10,marginBottom:10}} className="fade-in">
-          <div style={{fontSize:10,color:C.accent,letterSpacing:2,marginBottom:8}}>
+          <div style={{fontSize:12,color:C.accent,letterSpacing:2,marginBottom:8}}>
             AJUSTAR — {sel.name.toUpperCase()}
           </div>
           {/* Selector jugador */}
           <div style={{marginBottom:8}}>
-            <div style={{fontSize:9,color:C.muted,letterSpacing:1,marginBottom:5}}>MOSTRAR EN MINIS DE</div>
+            <div style={{fontSize:11,color:C.muted,letterSpacing:1,marginBottom:5}}>MOSTRAR EN MINIS DE</div>
             <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
               <button onClick={()=>update(sel.id,"playerId",null)}
                 style={{padding:"3px 8px",background:sel.playerId===null?"rgba(56,189,248,.1)":"transparent",
                   border:`1px solid ${sel.playerId===null?C.blue:C.border}`,borderRadius:2,cursor:"pointer",
-                  color:sel.playerId===null?C.blue:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:9,fontWeight:700}}>
+                  color:sel.playerId===null?C.blue:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700}}>
                 TODOS
               </button>
               {players.map(p=>(
                 <button key={p.id} onClick={()=>update(sel.id,"playerId",p.id)}
                   style={{padding:"3px 8px",background:sel.playerId===p.id?`rgba(${h2rgb(p.color)},.1)`:"transparent",
                     border:`1px solid ${sel.playerId===p.id?p.color:C.border}`,borderRadius:2,cursor:"pointer",
-                    color:sel.playerId===p.id?p.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:9,fontWeight:700}}>
+                    color:sel.playerId===p.id?p.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700}}>
                   {p.name}
                 </button>
               ))}
@@ -378,11 +388,11 @@ function OverlayManager({overlays,setOverlays,players}){
           </div>
           {/* Opacidad */}
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:9,color:C.muted,letterSpacing:1,width:52,flexShrink:0}}>OPACIDAD</span>
+            <span style={{fontSize:11,color:C.muted,letterSpacing:1,width:52,flexShrink:0}}>OPACIDAD</span>
             <input type="range" min={10} max={100} step={5} value={sel.opacity}
               onChange={e=>update(sel.id,"opacity",parseFloat(e.target.value))}
               style={{flex:1,accentColor:C.accent,height:3}}/>
-            <span style={{fontSize:9,color:C.text,width:32,textAlign:"right",flexShrink:0}}>{sel.opacity}%</span>
+            <span style={{fontSize:11,color:C.text,width:32,textAlign:"right",flexShrink:0}}>{sel.opacity}%</span>
           </div>
         </div>
       )}
@@ -399,7 +409,7 @@ function OverlayManager({overlays,setOverlays,players}){
       </button>
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp"
         style={{display:"none"}} onChange={addOverlay}/>
-      <div style={{marginTop:6,fontSize:9,color:C.muted,letterSpacing:1}}>
+      <div style={{marginTop:6,fontSize:11,color:C.muted,letterSpacing:1}}>
         PNG, JPG, SVG, WebP · Se proyecta sobre el tablero en pantalla y proyector
       </div>
     </div>
@@ -431,7 +441,7 @@ function ArucoGenerator(){
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
         {ARUCO_FACTIONS.map(f=>(
           <button key={f.id} onClick={()=>setSelFaction(f)}
-            style={{padding:"4px 10px",border:`1px solid ${selFaction.id===f.id?f.color:C.border}`,borderRadius:2,cursor:"pointer",background:selFaction.id===f.id?`rgba(${h2rgb(f.color)},.12)`:"transparent",color:selFaction.id===f.id?f.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:10,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
+            style={{padding:"4px 10px",border:`1px solid ${selFaction.id===f.id?f.color:C.border}`,borderRadius:2,cursor:"pointer",background:selFaction.id===f.id?`rgba(${h2rgb(f.color)},.12)`:"transparent",color:selFaction.id===f.id?f.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:12,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
             {f.name.toUpperCase()}
           </button>
         ))}
@@ -440,13 +450,13 @@ function ArucoGenerator(){
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:10}}>
         {[0,1,2,3].map(i=>(
           <div key={i} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,padding:10,textAlign:"center"}}>
-            <div style={{fontSize:9,color:selFaction.color,fontWeight:700,letterSpacing:1,marginBottom:4}}>
+            <div style={{fontSize:11,color:selFaction.color,fontWeight:700,letterSpacing:1,marginBottom:4}}>
               {ARUCO_CORNERS[i]}
             </div>
             <canvas ref={canvasRefs[i]}
               style={{width:100,height:100,display:"block",margin:"0 auto",imageRendering:"pixelated",border:`1px solid ${C.border}`}}/>
             <button onClick={()=>download(i)}
-              style={{marginTop:6,padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:9,fontWeight:700,letterSpacing:1,transition:"all .2s"}}
+              style={{marginTop:6,padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.color=C.blue;}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
               ↓ PNG
@@ -463,7 +473,7 @@ function ArucoGenerator(){
       </button>
       {/* Instrucciones */}
       <div style={{marginTop:10,padding:"8px 10px",background:C.bg,borderRadius:2,border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:9,color:C.muted,letterSpacing:1,lineHeight:1.6}}>
+        <div style={{fontSize:11,color:C.muted,letterSpacing:1,lineHeight:1.6}}>
           Imprime a <span style={{color:C.text}}>3×3 cm exactos</span> · Pega en las <span style={{color:C.text}}>4 esquinas del tapete</span> · La cámara cenital los detecta automáticamente como referencia de calibración
         </div>
       </div>
@@ -475,7 +485,7 @@ function ArucoGenerator(){
 function StatusBadge({status}){
   const cfg={pending:{label:"PENDIENTE",color:"#3a5a7a",bg:"transparent"},deployed:{label:"EN JUEGO",color:"#22c55e",bg:"rgba(34,197,94,0.1)"},eliminated:{label:"ELIMINADA",color:"#f43f5e",bg:"rgba(244,63,94,0.1)"}};
   const s=cfg[status]||cfg.pending;
-  return <span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:s.color,background:s.bg,border:`1px solid ${s.color}44`}}>{s.label}</span>;
+  return <span style={{fontSize:12,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:s.color,background:s.bg,border:`1px solid ${s.color}44`}}>{s.label}</span>;
 }
 
 function UnitRow({unit,status,playerColor,onDeploy,onEliminate,selected,onClick}){
@@ -525,10 +535,10 @@ function PatrolSelector({playerId,playerColor,playerName,patrol,patrols,system,m
       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
         <div style={{width:8,height:8,borderRadius:"50%",background:playerColor,boxShadow:`0 0 6px ${playerColor}`}}/>
         <span style={{fontWeight:700,fontSize:12,color:playerColor,letterSpacing:1}}>{playerName}</span>
-        {patrol&&<span className="tag" style={{color:fc,background:`rgba(${h2rgb(fc)},.1)`,fontSize:9}}>{patrol.faction}</span>}
+        {patrol&&<span className="tag" style={{color:fc,background:`rgba(${h2rgb(fc)},.1)`,fontSize:11}}>{patrol.faction}</span>}
       </div>
       {available.length===0?(
-        <div style={{fontSize:10,color:C.muted,padding:"6px 0"}}>No hay patrullas para este modo. Importa desde CONFIG.</div>
+        <div style={{fontSize:12,color:C.muted,padding:"6px 0"}}>No hay patrullas para este modo. Importa desde CONFIG.</div>
       ):(
         <div style={{display:"flex",flexDirection:"column",gap:3}}>
           {available.map(p=>{
@@ -540,9 +550,9 @@ function PatrolSelector({playerId,playerColor,playerName,patrol,patrols,system,m
                 <div style={{width:5,height:5,borderRadius:"50%",background:pfc,flexShrink:0}}/>
                 <div style={{flex:1}}>
                   <div style={{fontSize:11,fontWeight:700,color:isSel?pfc:C.text,letterSpacing:1}}>{p.patrol_name}</div>
-                  <div style={{fontSize:9,color:C.muted}}>{p.faction} · {p.units?.length||0} unidades</div>
+                  <div style={{fontSize:11,color:C.muted}}>{p.faction} · {p.units?.length||0} unidades</div>
                 </div>
-                {isSel&&<span style={{fontSize:10,color:pfc}}>✓</span>}
+                {isSel&&<span style={{fontSize:12,color:pfc}}>✓</span>}
               </button>
             );
           })}
@@ -679,25 +689,33 @@ function App(){
       if(!img){img=new Image();img.src=ov.src;overlayImgCache.current[ov.id]=img;}
       if(!img.complete)return;
       const inchPx=W/modeInfo.w;
-      // Dibujar sobre cada mini del jugador asignado (o todas si no hay jugador)
       minis.forEach(mini=>{
         if(ov.playerId && mini.playerId!==ov.playerId)return;
         const unit=mini.unitData;if(!unit)return;
         const cx=mini.x*W,cy=mini.y*H;
         const mv=parseInt(unit.stats?.M)||6;
         const bsz=(unit.base_size_mm/2/25.4)*inchPx;
-        const rad=(mv*inchPx+bsz); // radio del aura de movimiento
+        const rad=mv*inchPx+bsz;
         const player=players.find(p=>p.id===mini.playerId);
         const col=player?.color||C.accent;
-        ctx.save();
-        ctx.globalAlpha=(ov.opacity/100)*0.6;
-        // Círculo coloreado de fondo con el color del jugador
         const [r,g,b]=h2p(col);
+        const size=Math.ceil(rad*1.4);
+        ctx.save();
+        ctx.globalAlpha=(ov.opacity/100)*0.75;
+        // Fondo del aura coloreado
         ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);
-        ctx.fillStyle=`rgba(${r},${g},${b},0.08)`;ctx.fill();
-        // Imagen centrada en el aura
-        const size=rad*1.2;
-        ctx.drawImage(img,cx-size/2,cy-size/2,size,size);
+        ctx.fillStyle=`rgba(${r},${g},${b},0.07)`;ctx.fill();
+        // Canvas offscreen para tintar la imagen con el color del jugador
+        const off=document.createElement('canvas');
+        off.width=off.height=size*2;
+        const octx=off.getContext('2d');
+        octx.drawImage(img,0,0,size*2,size*2);            // imagen original
+        octx.globalCompositeOperation='multiply';          // multiplica color
+        octx.fillStyle=col;
+        octx.fillRect(0,0,size*2,size*2);
+        octx.globalCompositeOperation='destination-in';    // recorta con alpha original
+        octx.drawImage(img,0,0,size*2,size*2);
+        ctx.drawImage(off,cx-size,cy-size,size*2,size*2);
         ctx.globalAlpha=1;
         ctx.restore();
       });
@@ -820,7 +838,7 @@ function App(){
           <div style={{display:"flex",gap:4}}>
             {Object.entries(GAME_SYSTEMS).map(([key,sys])=>(
               <button key={key} onClick={()=>changeSystem(key)} className={`rb ${activeSystem===key?"bon":""}`}
-                style={{padding:"3px 9px",fontSize:10,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
+                style={{padding:"3px 9px",fontSize:12,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
                 {sys.short}
               </button>
             ))}
@@ -839,7 +857,7 @@ function App(){
             style={{padding:"9px 18px",borderRadius:0,fontSize:11,letterSpacing:2,borderLeft:i>0?`1px solid ${C.border}`:"none",borderTop:"none",borderRight:"none",borderBottom:tab===t?`2px solid ${C.accent}`:"2px solid transparent"}}>
             {t}
             {t==="JUEGO"&&Object.keys(playerPatrols).length>0&&(
-              <span style={{marginLeft:5,fontSize:9,color:C.green,background:"rgba(34,197,94,.1)",padding:"1px 5px",borderRadius:2}}>{Object.keys(playerPatrols).length}</span>
+              <span style={{marginLeft:5,fontSize:11,color:C.green,background:"rgba(34,197,94,.1)",padding:"1px 5px",borderRadius:2}}>{Object.keys(playerPatrols).length}</span>
             )}
           </button>
         ))}
@@ -864,11 +882,11 @@ function App(){
                 </button>
                 {showDeployMenu&&(
                   <div style={{position:"absolute",top:"110%",left:0,zIndex:20,background:C.panel,border:`1px solid ${C.border}`,borderRadius:2,padding:8,minWidth:240,boxShadow:"0 0 20px rgba(0,0,0,0.5)"}}>
-                    <div style={{fontSize:10,color:C.muted,letterSpacing:2,marginBottom:8}}>ZONA DE DESPLIEGUE</div>
+                    <div style={{fontSize:12,color:C.muted,letterSpacing:2,marginBottom:8}}>ZONA DE DESPLIEGUE</div>
                     {Object.entries(DEPLOY_ZONES).map(([key,{label,desc}])=>(
                       <button key={key} onClick={()=>{setActiveZone(activeZone===key?null:key);setShowDeployMenu(false);}}
                         style={{display:"block",width:"100%",textAlign:"left",padding:"6px 8px",background:activeZone===key?"rgba(34,197,94,.12)":"transparent",border:"none",borderRadius:2,cursor:"pointer",marginBottom:2,color:activeZone===key?C.green:C.text,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>
-                        <div>{label}</div><div style={{fontSize:10,color:C.muted,fontWeight:400}}>{desc}</div>
+                        <div>{label}</div><div style={{fontSize:12,color:C.muted,fontWeight:400}}>{desc}</div>
                       </button>
                     ))}
                     {activeZone&&<button onClick={()=>{setActiveZone(null);setShowDeployMenu(false);}} style={{display:"block",width:"100%",padding:"5px 8px",marginTop:4,background:"transparent",border:`1px solid ${C.red}`,borderRadius:2,cursor:"pointer",color:C.red,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>✕ OCULTAR ZONA</button>}
@@ -880,8 +898,8 @@ function App(){
             {/* Indicador zoom */}
             {zoom!==1&&(
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                <span style={{fontSize:10,color:C.muted,letterSpacing:1}}>ZOOM {Math.round(zoom*100)}%</span>
-                <button onClick={resetZoom} className="rb" style={{padding:"2px 8px",fontSize:10,letterSpacing:1}}>RESET</button>
+                <span style={{fontSize:12,color:C.muted,letterSpacing:1}}>ZOOM {Math.round(zoom*100)}%</span>
+                <button onClick={resetZoom} className="rb" style={{padding:"2px 8px",fontSize:12,letterSpacing:1}}>RESET</button>
               </div>
             )}
             <div style={{position:"relative"}}>
@@ -897,7 +915,7 @@ function App(){
                   display:"block",width:"100%",height:"auto"}}/>
               {assignMenu&&(
                 <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
-                  <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
+                  <div style={{fontSize:12,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
                   {players.map(p=>(
                     <button key={p.id} onClick={()=>{setMinis(prev=>prev.map(m=>m.id===assignMenu.miniId?{...m,playerId:p.id}:m));setAssignMenu(null);setSelMini(null);}}
                       style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"5px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.text,fontSize:12,fontFamily:"'Rajdhani',monospace",fontWeight:600,letterSpacing:1}}
@@ -919,15 +937,15 @@ function App(){
                   <span style={{color:C.muted}}>{s.deployed||0} en juego{s.eliminated>0?` · ${s.eliminated} bajas`:""}{s.pending>0?` · ${s.pending} pend.`:""}</span>
                 </div>
               );})}
-              {minis.length===0&&<span style={{fontSize:10,color:C.muted}}>Ve a JUEGO para seleccionar patrullas y desplegar unidades</span>}
+              {minis.length===0&&<span style={{fontSize:12,color:C.muted}}>Ve a JUEGO para seleccionar patrullas y desplegar unidades</span>}
             </div>
           </div>
           <div style={{width:190,flexShrink:0}}>
             <div className="panel" style={{borderRadius:2,padding:10,marginBottom:8}}>
-              <div style={{color:C.muted,fontSize:10,letterSpacing:2,marginBottom:6}}>MODO ACTIVO</div>
+              <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:6}}>MODO ACTIVO</div>
               <div style={{fontSize:11,fontWeight:700,color:sysInfo.color,letterSpacing:1}}>{sysInfo.short}</div>
-              <div style={{fontSize:10,color:C.text}}>{modeInfo.label}</div>
-              <div style={{fontSize:9,color:C.muted,marginTop:2}}>{modeInfo.w}" × {modeInfo.h}"</div>
+              <div style={{fontSize:12,color:C.text}}>{modeInfo.label}</div>
+              <div style={{fontSize:11,color:C.muted,marginTop:2}}>{modeInfo.w}" × {modeInfo.h}"</div>
             </div>
             {players.map(p=>{const patrol=playerPatrols[p.id];const s=gameStats[p.id]||{};const fc=patrol?(FACTION_COLORS[patrol.faction_keyword]||C.blue):C.muted;return(
               <div key={p.id} className="panel" style={{borderRadius:2,padding:10,marginBottom:6,borderLeft:`2px solid ${p.color}`}}>
@@ -937,14 +955,14 @@ function App(){
                 </div>
                 {patrol?(
                   <>
-                    <div style={{fontSize:10,color:fc,marginBottom:4}}>{patrol.patrol_name}</div>
+                    <div style={{fontSize:12,color:fc,marginBottom:4}}>{patrol.patrol_name}</div>
                     <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                      {s.deployed>0&&<span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:9}}>{s.deployed} en juego</span>}
-                      {s.pending>0&&<span className="tag" style={{color:C.muted,background:C.bg,fontSize:9}}>{s.pending} pend.</span>}
-                      {s.eliminated>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:9}}>{s.eliminated} bajas</span>}
+                      {s.deployed>0&&<span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:11}}>{s.deployed} en juego</span>}
+                      {s.pending>0&&<span className="tag" style={{color:C.muted,background:C.bg,fontSize:11}}>{s.pending} pend.</span>}
+                      {s.eliminated>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:11}}>{s.eliminated} bajas</span>}
                     </div>
                   </>
-                ):<div style={{fontSize:10,color:C.muted}}>Sin patrulla.</div>}
+                ):<div style={{fontSize:12,color:C.muted}}>Sin patrulla.</div>}
               </div>
             );})}
           </div>
@@ -993,7 +1011,7 @@ function App(){
           <div className="panel" style={{borderRadius:2,padding:12,marginBottom:12}}>
             <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
               <div>
-                <div style={{color:C.muted,fontSize:10,letterSpacing:2,marginBottom:6}}>SISTEMA DE JUEGO</div>
+                <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:6}}>SISTEMA DE JUEGO</div>
                 <div style={{display:"flex",gap:4}}>
                   {Object.entries(GAME_SYSTEMS).map(([key,sys])=>(
                     <button key={key} onClick={()=>changeSystem(key)} className={`rb ${activeSystem===key?"bon":""}`}
@@ -1004,7 +1022,7 @@ function App(){
                 </div>
               </div>
               <div>
-                <div style={{color:C.muted,fontSize:10,letterSpacing:2,marginBottom:6}}>MODO DE JUEGO</div>
+                <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:6}}>MODO DE JUEGO</div>
                 <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                   {Object.entries(sysInfo.modes).map(([key,m])=>(
                     <button key={key} onClick={()=>changeMode(key)} className={`rb ${activeMode===key?"on":""}`} style={{padding:"5px 12px",fontSize:11,letterSpacing:1}}>{m.label}</button>
@@ -1012,9 +1030,9 @@ function App(){
                 </div>
               </div>
               <div style={{marginLeft:"auto",textAlign:"right"}}>
-                <div style={{fontSize:10,color:C.muted,marginBottom:2}}>TABLERO</div>
+                <div style={{fontSize:12,color:C.muted,marginBottom:2}}>TABLERO</div>
                 <div style={{fontSize:14,fontWeight:700,color:sysInfo.color}}>{modeInfo.w}" × {modeInfo.h}"</div>
-                <div style={{fontSize:10,color:C.muted}}>{modeInfo.maxRounds} rondas</div>
+                <div style={{fontSize:12,color:C.muted}}>{modeInfo.maxRounds} rondas</div>
               </div>
             </div>
           </div>
@@ -1044,13 +1062,13 @@ function App(){
                         <div style={{fontSize:11,color:fc}}>{patrol.patrol_name}</div>
                       </div>
                       <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                        <span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:9}}>{stats.deployed||0} en juego</span>
-                        <span className="tag" style={{color:C.muted,background:C.bg,fontSize:9}}>{stats.pending||0} pend.</span>
-                        {(stats.eliminated||0)>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:9}}>{stats.eliminated} bajas</span>}
+                        <span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:11}}>{stats.deployed||0} en juego</span>
+                        <span className="tag" style={{color:C.muted,background:C.bg,fontSize:11}}>{stats.pending||0} pend.</span>
+                        {(stats.eliminated||0)>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:11}}>{stats.eliminated} bajas</span>}
                       </div>
                     </div>
                     {patrol.faction_ability&&(
-                      <div style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:6,borderLeft:`2px solid ${fc}44`,fontSize:10,color:C.muted}}>
+                      <div style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:6,borderLeft:`2px solid ${fc}44`,fontSize:12,color:C.muted}}>
                         <span style={{color:fc,fontWeight:700,marginRight:5}}>{patrol.faction_ability.name}</span>
                         {patrol.faction_ability.description}
                       </div>
@@ -1069,14 +1087,14 @@ function App(){
                     </div>
                     {patrol.stratagems?.length>0&&(
                       <div style={{marginTop:8}}>
-                        <div style={{fontSize:10,color:C.muted,letterSpacing:2,marginBottom:5}}>ESTRATAGEMAS</div>
+                        <div style={{fontSize:12,color:C.muted,letterSpacing:2,marginBottom:5}}>ESTRATAGEMAS</div>
                         {patrol.stratagems.map(s=>(
                           <div key={s.name} style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:3,borderLeft:"2px solid #38bdf844"}}>
                             <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
-                              <span style={{fontSize:10,fontWeight:700,color:C.blue}}>{s.name}</span>
+                              <span style={{fontSize:12,fontWeight:700,color:C.blue}}>{s.name}</span>
                               <span className="tag" style={{color:C.blue,background:"rgba(56,189,248,.1)",fontSize:8}}>{s.cost_cp}CP</span>
                             </div>
-                            <div style={{fontSize:9,color:C.muted,lineHeight:1.3}}>{s.effect}</div>
+                            <div style={{fontSize:11,color:C.muted,lineHeight:1.3}}>{s.effect}</div>
                           </div>
                         ))}
                       </div>
@@ -1122,23 +1140,23 @@ function App(){
                 <button onClick={()=>{
                   const defaults={move:"#22c55e",charge:"#a855f7",shoot:"#38bdf8",abilities:"#fbbf24"};
                   setAuraColors(prev=>({...prev,[key]:defaults[key]}));
-                }} className="rb" style={{padding:"2px 7px",fontSize:10}}>↺</button>
+                }} className="rb" style={{padding:"2px 7px",fontSize:12}}>↺</button>
               </div>
             ))}
           </div>
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
             <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>ANTHROPIC API KEY</div>
-            <div style={{fontSize:10,color:C.muted,marginBottom:8,lineHeight:1.4}}>Necesaria para importar Combat Patrols desde PDF. Solo se guarda en memoria.</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:8,lineHeight:1.4}}>Necesaria para importar Combat Patrols desde PDF. Solo se guarda en memoria.</div>
             <div style={{display:"flex",gap:6}}>
               <input type={showApiKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..."
                 style={{flex:1,background:C.bg,border:`1px solid ${apiKey?C.green:C.border}`,borderRadius:2,padding:"6px 10px",color:C.text,fontFamily:"'Share Tech Mono',monospace",fontSize:12,outline:"none"}}/>
               <button className="rb" onClick={()=>setShowApiKey(v=>!v)} style={{padding:"6px 10px",fontSize:11}}>{showApiKey?"OCULTAR":"VER"}</button>
             </div>
-            {apiKey&&<div style={{marginTop:5,fontSize:10,color:C.green}}>✓ API key configurada</div>}
+            {apiKey&&<div style={{marginTop:5,fontSize:12,color:C.green}}>✓ API key configurada</div>}
           </div>
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
             <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>IMPORTAR COMBAT PATROL (PDF)</div>
-            <div style={{fontSize:10,color:C.muted,marginBottom:10,lineHeight:1.4}}>Sube el PDF oficial de una Combat Patrol. Claude extraerá automáticamente unidades, armas, habilidades y estratagemas.</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.4}}>Sube el PDF oficial de una Combat Patrol. Claude extraerá automáticamente unidades, armas, habilidades y estratagemas.</div>
             <div className={`drop-zone ${dragOver?"drag-over":""}`} onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} onDrop={handleDrop} onClick={()=>fileRef.current?.click()}>
               {pdfLoading?(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}><div className="spin" style={{fontSize:22}}>⟳</div><div style={{fontSize:11,color:C.blue}}>Procesando con Claude...</div></div>):(<div><div style={{fontSize:18,marginBottom:5}}>📄</div><div style={{fontSize:11,color:C.muted}}>Arrastra un PDF o haz clic para seleccionar</div></div>)}
             </div>
@@ -1147,14 +1165,14 @@ function App(){
           </div>
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
             <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>PROYECCIÓN — IMÁGENES PERSONALIZADAS</div>
-            <div style={{fontSize:10,color:C.muted,marginBottom:10,lineHeight:1.4}}>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.4}}>
               Proyecta logos, emblemas o cualquier imagen sobre el tablero. Útil para logos de tienda, emblemas de facción o marcadores personalizados.
             </div>
             <OverlayManager overlays={overlays} setOverlays={setOverlays} players={players}/>
           </div>
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
             <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>MARCADORES ARUCO — CALIBRACIÓN DE CÁMARA</div>
-            <div style={{fontSize:10,color:C.muted,marginBottom:10,lineHeight:1.4}}>Genera marcadores ArUco temáticos por facción para las 4 esquinas del tablero. La cámara cenital los detecta automáticamente para calibrar posición y escala en tiempo real.</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.4}}>Genera marcadores ArUco temáticos por facción para las 4 esquinas del tablero. La cámara cenital los detecta automáticamente para calibrar posición y escala en tiempo real.</div>
             <ArucoGenerator/>
           </div>
           <div className="panel" style={{borderRadius:2,padding:14}}>
@@ -1163,11 +1181,11 @@ function App(){
               <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:C.bg,borderRadius:2,marginBottom:3,borderLeft:`2px solid ${fc}`}}>
                 <div style={{width:5,height:5,borderRadius:"50%",background:fc,flexShrink:0}}/>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:10,color:C.text,fontWeight:700}}>{p.patrol_name}</div>
-                  <div style={{fontSize:9,color:C.muted}}>{p.faction} · {p.system} · {p.game_mode}</div>
+                  <div style={{fontSize:12,color:C.text,fontWeight:700}}>{p.patrol_name}</div>
+                  <div style={{fontSize:11,color:C.muted}}>{p.faction} · {p.system} · {p.game_mode}</div>
                 </div>
-                <span style={{fontSize:9,color:fc}}>{p.units?.length||0} uds</span>
-                {!EMBEDDED_PATROLS.find(e=>e.id===p.id)&&(<button onClick={()=>setPatrols(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"1px 6px",fontSize:10,color:C.red,borderColor:C.red}}>✕</button>)}
+                <span style={{fontSize:11,color:fc}}>{p.units?.length||0} uds</span>
+                {!EMBEDDED_PATROLS.find(e=>e.id===p.id)&&(<button onClick={()=>setPatrols(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"1px 6px",fontSize:12,color:C.red,borderColor:C.red}}>✕</button>)}
               </div>
             );})}
           </div>
@@ -1185,10 +1203,10 @@ function App(){
             {[{label:"M — MOVIMIENTO",color:C.green,desc:"Radio de movimiento en pulgadas."},{label:"C — CARGA",color:C.purple,desc:"Alcance de carga estimado (M + 7\" media de 2D6)."},{label:"AD — ARMA DIST.",color:C.blue,desc:"Alcance del arma de mayor rango."},{label:"HAB — HABILIDADES",color:C.yellow,desc:"Auras de habilidades (Sinapsis, Fortune, Omni-scramblers…)"}].map(({label,color,desc})=>(
               <div key={label} style={{marginBottom:8,padding:10,background:C.bg,borderRadius:2,borderLeft:`3px solid ${color}`}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><div style={{width:7,height:7,borderRadius:"50%",background:color}}/><span style={{fontWeight:700,fontSize:12,color,letterSpacing:1}}>{label}</span></div>
-                <p style={{fontSize:10,color:C.muted,lineHeight:1.4}}>{desc}</p>
+                <p style={{fontSize:12,color:C.muted,lineHeight:1.4}}>{desc}</p>
               </div>
             ))}
-            <div style={{fontSize:10,color:C.muted,textAlign:"center",marginTop:6}}>CLIC FUERA PARA CERRAR</div>
+            <div style={{fontSize:12,color:C.muted,textAlign:"center",marginTop:6}}>CLIC FUERA PARA CERRAR</div>
           </div>
         </div>
       )}
