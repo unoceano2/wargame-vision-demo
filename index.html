@@ -682,7 +682,7 @@ function App(){
       ctx.beginPath();ctx.moveTo(x+ox*s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+oy*s);ctx.stroke();
     });
     minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,W,H,BW,selMini===mini.id,t,activeAuras,auraColors);});
-    // Overlays personalizados — se proyectan en el aura de movimiento de cada mini del jugador
+    // Overlays personalizados — se proyectan dentro del aura de movimiento de cada mini
     overlays.forEach(ov=>{
       if(!ov.visible||!ov.src)return;
       let img=overlayImgCache.current[ov.id];
@@ -695,27 +695,44 @@ function App(){
         const cx=mini.x*W,cy=mini.y*H;
         const mv=parseInt(unit.stats?.M)||6;
         const bsz=(unit.base_size_mm/2/25.4)*inchPx;
+        // Radio exacto del aura de movimiento
         const rad=mv*inchPx+bsz;
+        // Tamaño de la imagen = diámetro del aura × factor de relleno interior (0.82 deja margen)
+        const drawR=rad*0.82;
         const player=players.find(p=>p.id===mini.playerId);
         const col=player?.color||C.accent;
         const [r,g,b]=h2p(col);
-        const size=Math.ceil(rad*1.4);
+
         ctx.save();
-        ctx.globalAlpha=(ov.opacity/100)*0.75;
-        // Fondo del aura coloreado
+        // Fondo del aura coloreado suave
         ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);
         ctx.fillStyle=`rgba(${r},${g},${b},0.07)`;ctx.fill();
-        // Canvas offscreen para tintar la imagen con el color del jugador
+
+        // Clip circular — la imagen no sale del aura
+        ctx.beginPath();ctx.arc(cx,cy,drawR,0,Math.PI*2);ctx.clip();
+
+        // Canvas offscreen para tintar la imagen respetando aspect ratio
+        const iw=img.naturalWidth||img.width||100;
+        const ih=img.naturalHeight||img.height||100;
+        const aspect=iw/ih;
+        // Calcular tamaño que encaje en el círculo sin deformar
+        let dw,dh;
+        if(aspect>=1){dw=drawR*2;dh=dw/aspect;}
+        else{dh=drawR*2;dw=dh*aspect;}
+        const offSz=Math.ceil(Math.max(dw,dh));
         const off=document.createElement('canvas');
-        off.width=off.height=size*2;
+        off.width=offSz;off.height=offSz;
         const octx=off.getContext('2d');
-        octx.drawImage(img,0,0,size*2,size*2);            // imagen original
-        octx.globalCompositeOperation='multiply';          // multiplica color
-        octx.fillStyle=col;
-        octx.fillRect(0,0,size*2,size*2);
-        octx.globalCompositeOperation='destination-in';    // recorta con alpha original
-        octx.drawImage(img,0,0,size*2,size*2);
-        ctx.drawImage(off,cx-size,cy-size,size*2,size*2);
+        const ox=(offSz-dw)/2,oy=(offSz-dh)/2;
+        octx.drawImage(img,ox,oy,dw,dh);
+        // Tintar con color del jugador
+        octx.globalCompositeOperation='multiply';
+        octx.fillStyle=col;octx.fillRect(0,0,offSz,offSz);
+        octx.globalCompositeOperation='destination-in';
+        octx.drawImage(img,ox,oy,dw,dh);
+
+        ctx.globalAlpha=(ov.opacity/100)*0.8;
+        ctx.drawImage(off,cx-offSz/2,cy-offSz/2,offSz,offSz);
         ctx.globalAlpha=1;
         ctx.restore();
       });
