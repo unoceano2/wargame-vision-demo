@@ -75,12 +75,12 @@ const GAME_SYSTEMS = {
 };
 
 const DEPLOY_ZONES = {
-  dawn_of_war:{label:"Dawn of War",desc:'12" borde largo'},
-  hammer_and_anvil:{label:"Hammer & Anvil",desc:'24" borde largo'},
-  spearhead_assault:{label:"Spearhead Assault",desc:'Triángulos borde corto'},
-  search_and_destroy:{label:"Search & Destroy",desc:'Diagonal + exclusión 9"'},
-  front_line_assault:{label:"Front-Line Assault",desc:'Triángulos borde largo'},
-  vanguard_strike:{label:"Vanguard Strike",desc:'Diagonal asimétrica'},
+  hammer_and_anvil:    {label:"Hammer and Anvil",    desc:'12" borde largo · 5 objetivos'},
+  search_and_destroy:  {label:"Search and Destroy",  desc:'Diagonal · exclusión 9" centro'},
+  crucible_of_battle:  {label:"Crucible of Battle",  desc:'Diagonal esquina a esquina'},
+  dawn_of_war:         {label:"Dawn of War",          desc:'12" borde corto · exclusión 4"'},
+  sweeping_engagement: {label:"Sweeping Engagement",  desc:'Diagonal asimétrica · 4 objetivos'},
+  spearhead_assault:   {label:"Spearhead Assault",    desc:'Triángulos borde corto'},
 };
 
 const EMBEDDED_PATROLS = [
@@ -185,19 +185,178 @@ const EMBEDDED_PATROLS = [
 ];
 
 // ─── DIBUJO ──────────────────────────────────────────────────────────────────
-function drawDeploymentZone(ctx,W,H,BW,BH,zoneKey){
-  const px=v=>v*W/BW,py=v=>v*H/BH,P1="#f97316",P2="#38bdf8";
-  const fillZ=(path,fill,stroke)=>{ctx.save();ctx.beginPath();path();ctx.fillStyle=fill+"33";ctx.fill();ctx.strokeStyle=stroke;ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.stroke();ctx.setLineDash([]);ctx.restore();};
-  if(zoneKey==="dawn_of_war"){fillZ(()=>ctx.rect(0,0,W,py(12)),P1,P1);fillZ(()=>ctx.rect(0,H-py(12),W,py(12)),P2,P2);}
-  else if(zoneKey==="hammer_and_anvil"){fillZ(()=>ctx.rect(0,0,W,py(24)),P1,P1);fillZ(()=>ctx.rect(0,H-py(24),W,py(24)),P2,P2);}
-  else if(zoneKey==="spearhead_assault"){fillZ(()=>{ctx.moveTo(0,py(12));ctx.lineTo(px(9),H/2);ctx.lineTo(0,H-py(12));ctx.closePath();},P1,P1);fillZ(()=>{ctx.moveTo(W,py(12));ctx.lineTo(W-px(9),H/2);ctx.lineTo(W,H-py(12));ctx.closePath();},P2,P2);}
-  else if(zoneKey==="search_and_destroy"){fillZ(()=>ctx.rect(0,0,W,py(15)),P1,P1);fillZ(()=>ctx.rect(0,H-py(15),W,py(15)),P2,P2);ctx.save();ctx.beginPath();ctx.arc(W/2,H/2,px(9),0,Math.PI*2);ctx.fillStyle="rgba(5,13,26,0.85)";ctx.fill();ctx.strokeStyle="#f43f5e";ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#f43f5e";ctx.font="bold 10px 'Rajdhani',monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText('9" EXCL.',W/2,H/2);ctx.restore();}
-  else if(zoneKey==="front_line_assault"){fillZ(()=>{ctx.moveTo(0,0);ctx.lineTo(W,0);ctx.lineTo(W/2+px(6),py(15));ctx.lineTo(W/2,H/2-py(9));ctx.lineTo(W/2-px(6),py(15));ctx.closePath();},P1,P1);fillZ(()=>{ctx.moveTo(0,H);ctx.lineTo(W,H);ctx.lineTo(W/2+px(6),H-py(15));ctx.lineTo(W/2,H/2+py(9));ctx.lineTo(W/2-px(6),H-py(15));ctx.closePath();},P2,P2);}
-  else if(zoneKey==="vanguard_strike"){fillZ(()=>{ctx.moveTo(0,H);ctx.lineTo(W,H);ctx.lineTo(W,H-py(14.5));ctx.lineTo(W/2+px(12),H/2);ctx.lineTo(W/2,H/2+py(12));ctx.lineTo(px(21.5),0);ctx.lineTo(0,0);ctx.closePath();},P1,P1);fillZ(()=>{ctx.moveTo(W,0);ctx.lineTo(0,0);ctx.lineTo(0,py(14.5));ctx.lineTo(W/2-px(12),H/2);ctx.lineTo(W/2,H/2-py(12));ctx.lineTo(W-px(21.5),H);ctx.lineTo(W,H);ctx.closePath();},P2,P2);}
-  const labels={dawn_of_war:[[W/2,py(6),P1],[W/2,H-py(6),P2]],hammer_and_anvil:[[W/2,py(12),P1],[W/2,H-py(12),P2]],spearhead_assault:[[px(3),H/2,P1],[W-px(3),H/2,P2]],search_and_destroy:[[W/2,py(7),P1],[W/2,H-py(7),P2]],front_line_assault:[[W/2,py(4),P1],[W/2,H-py(4),P2]],vanguard_strike:[[px(6),H-py(6),P1],[W-px(6),py(6),P2]]};
-  ctx.save();ctx.font="bold 11px 'Rajdhani',monospace";ctx.textAlign="center";ctx.textBaseline="middle";
-  (labels[zoneKey]||[]).forEach(([x,y,c],i)=>{ctx.fillStyle=c;ctx.shadowColor=c;ctx.shadowBlur=6;ctx.fillText(`J${i+1}`,x,y);ctx.shadowBlur=0;});
+
+// Dibuja un marcador de objetivo (calavera) en posición en pulgadas
+function drawObjective(ctx,x,y,inchPx,label){
+  const r=(40/2/25.4)*inchPx; // peana exterminador 40mm
+  ctx.save();
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle="rgba(20,30,50,0.7)";ctx.fill();
+  ctx.strokeStyle="#c8dff5";ctx.lineWidth=1;ctx.stroke();
+  // Calavera simplificada
+  ctx.fillStyle="#c8dff5";ctx.font=`bold ${Math.max(8,r*1.1)}px 'Rajdhani',monospace`;
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText("☠",x,y);
+  if(label){
+    ctx.font=`bold ${Math.max(7,r*0.7)}px 'Rajdhani',monospace`;
+    ctx.fillStyle="#c8dff566";ctx.fillText(label,x,y+r+5);
+  }
   ctx.restore();
+}
+
+function drawDeploymentZone(ctx,W,H,BW,BH,zoneKey){
+  const px=v=>v*W/BW, py=v=>v*H/BH;
+  const iP=W/BW; // inchPx
+  const P1="#f97316",P2="#38bdf8",NML="rgba(255,255,255,0.03)";
+
+  const fillZ=(path,fill,stroke,dash=true)=>{
+    ctx.save();ctx.beginPath();path();
+    ctx.fillStyle=fill+"2a";ctx.fill();
+    ctx.strokeStyle=stroke;ctx.lineWidth=1.5;
+    if(dash)ctx.setLineDash([6,4]);
+    ctx.stroke();ctx.setLineDash([]);ctx.restore();
+  };
+
+  // Etiqueta de zona
+  const zoneLabel=(x,y,c,txt)=>{
+    ctx.save();ctx.font="bold 12px 'Rajdhani',monospace";
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillStyle=c;ctx.shadowColor=c;ctx.shadowBlur=8;
+    ctx.fillText(txt,x,y);ctx.shadowBlur=0;ctx.restore();
+  };
+
+  // ── HAMMER AND ANVIL ────────────────────────────────────────────────
+  // J1: franja sup 12", J2: franja inf 12", NML 6" central
+  // Tablero 44"×30". Objetivos: centro de cada zona + 2 laterales a 16" del centro
+  if(zoneKey==="hammer_and_anvil"){
+    fillZ(()=>ctx.rect(0,0,W,py(12)),P1,P1);
+    fillZ(()=>ctx.rect(0,H-py(12),W,py(12)),P2,P2);
+    fillZ(()=>ctx.rect(0,py(12),W,py(6)),NML,"transparent",false);
+    zoneLabel(W/2,py(6),P1,"J1 — ATTACKER");
+    zoneLabel(W/2,H-py(6),P2,"J2 — DEFENDER");
+    // Objetivos: layout de la carta (5 objetivos)
+    drawObjective(ctx,W/2,py(8),iP,"1");           // centro zona J1
+    drawObjective(ctx,W/2,H-py(8),iP,"5");          // centro zona J2
+    drawObjective(ctx,W/2,H/2,iP,"3");               // centro tablero
+    drawObjective(ctx,W/2-px(16),H/2,iP,"2");        // lateral izq
+    drawObjective(ctx,W/2+px(16),H/2,iP,"4");        // lateral der
+  }
+
+  // ── SEARCH AND DESTROY ──────────────────────────────────────────────
+  // J1: cuadrante sup-izq (hasta 12" del centro en X e Y)
+  // J2: cuadrante inf-der (espejo)
+  // Exclusión circular 9" en el centro
+  else if(zoneKey==="search_and_destroy"){
+    // J1 sup-izq: desde (0,0) hasta (BW/2, BH/2), margen de 12" del centro diagonal
+    fillZ(()=>{
+      ctx.moveTo(0,0);ctx.lineTo(W,0);
+      ctx.lineTo(W,H/2-py(12));ctx.lineTo(W/2+px(12),H/2-py(12));
+      ctx.lineTo(W/2,0);ctx.closePath();
+    },P1,P1);
+    // Triángulo rojo principal
+    fillZ(()=>{
+      ctx.moveTo(0,0);ctx.lineTo(W/2-px(0),0);
+      ctx.lineTo(0,H/2);ctx.closePath();
+    },P1,P1);
+    // J2 inf-der espejo
+    fillZ(()=>{
+      ctx.moveTo(W,H);ctx.lineTo(W/2,H);
+      ctx.lineTo(W,H/2);ctx.closePath();
+    },P2,P2);
+    // Zona exclusión 9"
+    ctx.save();ctx.beginPath();ctx.arc(W/2,H/2,px(9),0,Math.PI*2);
+    ctx.fillStyle="rgba(5,13,26,0.6)";ctx.fill();
+    ctx.strokeStyle="#f43f5e";ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle="#f43f5e88";ctx.font="bold 10px 'Rajdhani',monospace";
+    ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText('9"',W/2,H/2);
+    ctx.restore();
+    zoneLabel(px(8),py(6),P1,"J1");
+    zoneLabel(W-px(8),H-py(6),P2,"J2");
+    // Objetivos (4): 2 por bando a 12" del centro lateral
+    drawObjective(ctx,px(12),py(6),iP,"1");
+    drawObjective(ctx,W/2+px(12),py(6),iP,"2");
+    drawObjective(ctx,W/2-px(12),H-py(6),iP,"3");
+    drawObjective(ctx,W-px(12),H-py(6),iP,"4");
+  }
+
+  // ── CRUCIBLE OF BATTLE ──────────────────────────────────────────────
+  // Diagonal de esquina sup-izq a inf-der. J1 triángulo sup, J2 triángulo inf
+  // Exclusión 6" desde la diagonal
+  else if(zoneKey==="crucible_of_battle"){
+    // J1: triángulo superior (sup-izq a sup-der a inf-der)
+    fillZ(()=>{
+      ctx.moveTo(0,0);ctx.lineTo(W,0);
+      ctx.lineTo(W,H-py(6));ctx.lineTo(px(6),H);
+      ctx.lineTo(0,H);ctx.closePath();
+    },P1,P1);
+    // J2: triángulo inferior (inf-der a inf-izq a sup-izq)  
+    fillZ(()=>{
+      ctx.moveTo(W,H);ctx.lineTo(0,H);
+      ctx.lineTo(0,py(6));ctx.lineTo(W-px(6),0);
+      ctx.lineTo(W,0);ctx.closePath();
+    },P2,P2);
+    zoneLabel(px(8),py(5),P1,"J1");
+    zoneLabel(W-px(8),H-py(5),P2,"J2");
+    // Objetivos: según carta (centro + laterales)
+    drawObjective(ctx,px(8),py(8),iP,"1");
+    drawObjective(ctx,W/2,py(10),iP,"2");
+    drawObjective(ctx,W/2,H-py(10),iP,"3");
+    drawObjective(ctx,W-px(8),H-py(8),iP,"4");
+  }
+
+  // ── DAWN OF WAR ─────────────────────────────────────────────────────
+  // Franjas verticales: J1 primeros 12" borde izq, J2 últimos 12" borde der
+  // Exclusión: 4" desde cada borde de zona hacia dentro
+  else if(zoneKey==="dawn_of_war"){
+    fillZ(()=>ctx.rect(0,0,px(12),H),P1,P1);
+    fillZ(()=>ctx.rect(W-px(12),0,px(12),H),P2,P2);
+    // Marcas de exclusión 4"
+    ctx.save();ctx.strokeStyle=P1+"88";ctx.lineWidth=1;ctx.setLineDash([3,5]);
+    ctx.beginPath();ctx.moveTo(px(4),0);ctx.lineTo(px(4),H);ctx.stroke();
+    ctx.strokeStyle=P2+"88";
+    ctx.beginPath();ctx.moveTo(W-px(4),0);ctx.lineTo(W-px(4),H);ctx.stroke();
+    ctx.setLineDash([]);ctx.restore();
+    zoneLabel(px(6),H/2,P1,"J1");
+    zoneLabel(W-px(6),H/2,P2,"J2");
+    // Objetivos: 2 por bando a 4" del borde de zona + centro
+    drawObjective(ctx,px(6),H/2-py(10),iP,"1");
+    drawObjective(ctx,px(6),H/2+py(10),iP,"2");
+    drawObjective(ctx,W/2,H/4,iP,"3");
+    drawObjective(ctx,W/2,H*3/4,iP,"4");
+    drawObjective(ctx,W-px(6),H/2-py(10),iP,"5");
+    drawObjective(ctx,W-px(6),H/2+py(10),iP,"6");
+  }
+
+  // ── SWEEPING ENGAGEMENT ─────────────────────────────────────────────
+  // Diagonal: J1 triángulo sup-izq (16" desde borde largo), J2 inf-der espejo
+  // Exclusión 8" desde la diagonal + 12" desde el centro
+  else if(zoneKey==="sweeping_engagement"){
+    fillZ(()=>{
+      ctx.moveTo(0,0);ctx.lineTo(W,0);
+      ctx.lineTo(W/2,H/2-py(12));
+      ctx.lineTo(0,py(8));ctx.closePath();
+    },P1,P1);
+    fillZ(()=>{
+      ctx.moveTo(W,H);ctx.lineTo(0,H);
+      ctx.lineTo(W/2,H/2+py(12));
+      ctx.lineTo(W,H-py(8));ctx.closePath();
+    },P2,P2);
+    zoneLabel(px(8),py(5),P1,"J1");
+    zoneLabel(W-px(8),H-py(5),P2,"J2");
+    // Objetivos según carta
+    drawObjective(ctx,W/2+px(8),py(8),iP,"1");
+    drawObjective(ctx,px(16),H/2-py(8),iP,"2");
+    drawObjective(ctx,W-px(16),H/2+py(8),iP,"3");
+    drawObjective(ctx,W/2-px(8),H-py(8),iP,"4");
+  }
+
+  // ── SPEARHEAD ASSAULT (legacy) ──────────────────────────────────────
+  else if(zoneKey==="spearhead_assault"){
+    fillZ(()=>{ctx.moveTo(0,py(9));ctx.lineTo(px(15),H/2);ctx.lineTo(0,H-py(9));ctx.closePath();},P1,P1);
+    fillZ(()=>{ctx.moveTo(W,py(9));ctx.lineTo(W-px(15),H/2);ctx.lineTo(W,H-py(9));ctx.closePath();},P2,P2);
+    zoneLabel(px(4),H/2,P1,"J1");zoneLabel(W-px(4),H/2,P2,"J2");
+  }
 }
 
 function drawUnit(ctx,mini,unit,playerColor,W,H,BW,selected,t,activeAuras,auraColors){
