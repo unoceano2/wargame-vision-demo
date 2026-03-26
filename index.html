@@ -387,14 +387,21 @@ function drawUnit(ctx,mini,unit,playerColor,W,H,BW,selected,t,auraColors){
   ctx.restore();
 }
 
-// Dibuja auras fusionadas por tipo — agrupa círculos del mismo radio+color en un canvas offscreen
-// y proyecta solo el contorno exterior resultante
-function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMini){
-  if(!activeAuras.move&&!activeAuras.charge&&!activeAuras.shoot&&!activeAuras.abilities) return;
-  const inchPx=W/BW;
+// Calcula el centroide ponderado de un grupo de círculos (centro de masa por área)
+function groupCentroid(circles){
+  let wx=0,wy=0,totalW=0;
+  circles.forEach(({cx,cy,rad})=>{
+    const w=rad*rad; // peso proporcional al área
+    wx+=cx*w;wy+=cy*w;totalW+=w;
+  });
+  return totalW>0?{cx:wx/totalW,cy:wy/totalW}:{cx:circles[0].cx,cy:circles[0].cy};
+}
 
-  // Recopila todos los círculos de aura agrupados por (tipo, color, radio)
-  // key = `tipo_colorhex_radio`
+// Devuelve {cx,cy} del centroide del grupo de movimiento (para colocar overlays)
+// y dibuja las auras fusionadas. fillMode: "fill" | "border"
+function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMini,fillMode){
+  if(!activeAuras.move&&!activeAuras.charge&&!activeAuras.shoot&&!activeAuras.abilities) return {};
+  const inchPx=W/BW;
   const groups={};
 
   const addCircle=(key,cx,cy,rad,color,label,dash,lineW)=>{
@@ -404,11 +411,9 @@ function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMi
 
   minis.forEach(mini=>{
     const unit=mini.unitData;if(!unit)return;
-    const player=players.find(p=>p.id===mini.playerId);
     const cx=mini.x*W,cy=mini.y*H;
     const bsz=(unit.base_size_mm/2/25.4)*inchPx;
     const mv=parseInt(unit.stats?.M)||6;
-
     if(activeAuras.shoot){
       const mr=Math.max(0,...(unit.ranged_weapons||[]).map(w=>w.range_inches||0));
       if(mr>0) addCircle(`shoot_${auraColors.shoot}_${Math.round(bsz+mr*inchPx)}`,cx,cy,bsz+mr*inchPx,auraColors.shoot,`AD ${mr}"`,true,1);
@@ -431,90 +436,74 @@ function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMi
     }
   });
 
-  // Por cada grupo, dibujar la forma fusionada en un offscreen canvas
-  Object.values(groups).forEach(({circles,color,label,dash,lineW})=>{
+  // Acumular centroides de grupos de movimiento para devolver a los overlays
+  const moveCentroids=[];
+
+  Object.entries(groups).forEach(([key,{circles,color,label,dash,lineW}])=>{
     if(!circles.length)return;
     const [r,g,b]=h2p(color);
+    const isMoveGroup=key.startsWith("move_");
 
-    // Offscreen para calcular la forma fusionada
-    const off=document.createElement('canvas');
-    off.width=W;off.height=H;
-    const octx=off.getContext('2d');
-    // Rellenar todos los círculos en blanco (la unión)
-    octx.fillStyle="#ffffff";
-    circles.forEach(({cx,cy,rad})=>{
-      octx.beginPath();octx.arc(cx,cy,rad,0,Math.PI*2);octx.fill();
-    });
+    // Calcular centroide del grupo (para label y overlays)
+    const centroid=groupCentroid(circles);
+    if(isMoveGroup) moveCentroids.push({...centroid, rad:circles[0].rad, circles});
 
-    // Ahora dibujamos: relleno semitransparente + borde exterior
     ctx.save();
 
-    // Relleno: usar el offscreen como máscara de recorte no es directo en 2D,
-    // así que dibujamos fill de cada círculo con globalAlpha bajo
-    ctx.globalAlpha=0.06;
-    ctx.fillStyle=`rgb(${r},${g},${b})`;
-    circles.forEach(({cx,cy,rad})=>{
-      ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fill();
-    });
-    ctx.globalAlpha=1;
-
-    // Borde exterior: usar el truco de compositing
-    // Creamos un canvas con la forma blanca, luego lo erosionamos para quedarnos con el borde
-    const borderOff=document.createElement('canvas');
-    borderOff.width=W;borderOff.height=H;
-    const bctx=borderOff.getContext('2d');
-
-    // Dibujamos todos los círculos expandidos (borde exterior)
-    bctx.strokeStyle=color;
-    bctx.lineWidth=lineW*2;
-    bctx.fillStyle="#ffffff";
-    circles.forEach(({cx,cy,rad})=>{
-      bctx.beginPath();bctx.arc(cx,cy,rad,0,Math.PI*2);bctx.fill();
-    });
-    // Borrar el interior (erosión): quitamos los píxeles interiores
-    bctx.globalCompositeOperation='destination-out';
-    circles.forEach(({cx,cy,rad})=>{
-      bctx.beginPath();bctx.arc(cx,cy,rad-lineW*2,0,Math.PI*2);bctx.fill();
-    });
-    bctx.globalCompositeOperation='source-over';
-
-    // Colorear el borde resultante
-    bctx.globalCompositeOperation='source-in';
-    if(dash){
-      // Para línea discontinua, dibujar sobre el shape
-      bctx.globalCompositeOperation='source-atop';
+    // ── MODO RELLENO ──────────────────────────────────────────────────────
+    if(fillMode==="fill"){
+      // Relleno semitransparente de cada círculo
+      ctx.globalAlpha=0.07;
+      ctx.fillStyle=`rgb(${r},${g},${b})`;
+      circles.forEach(({cx,cy,rad})=>{ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fill();});
+      ctx.globalAlpha=1;
     }
+
+    // ── BORDE EXTERIOR FUSIONADO (ambos modos) ───────────────────────────
+    // Canvas offscreen: unión de círculos → erosión → borde coloreado
+    const bOff=document.createElement('canvas');
+    bOff.width=W;bOff.height=H;
+    const bctx=bOff.getContext('2d');
+    const bw=Math.max(1.5,lineW*2);
+    // Relleno blanco de la unión
+    bctx.fillStyle="#fff";
+    circles.forEach(({cx,cy,rad})=>{bctx.beginPath();bctx.arc(cx,cy,rad,0,Math.PI*2);bctx.fill();});
+    // Erosionar interior para quedarse solo con el borde
+    bctx.globalCompositeOperation='destination-out';
+    circles.forEach(({cx,cy,rad})=>{bctx.beginPath();bctx.arc(cx,cy,Math.max(0,rad-bw),0,Math.PI*2);bctx.fill();});
+    // Colorear el borde
+    bctx.globalCompositeOperation='source-in';
     bctx.fillStyle=color;
     bctx.fillRect(0,0,W,H);
 
-    // Proyectar sobre el canvas principal
-    ctx.shadowColor=color;ctx.shadowBlur=6;
-    ctx.drawImage(borderOff,0,0);
+    ctx.shadowColor=color;
+    ctx.shadowBlur=fillMode==="border"?8:4;
+    ctx.drawImage(bOff,0,0);
     ctx.shadowBlur=0;
 
-    // Etiqueta en el primer círculo del grupo
-    if(label){
-      const first=circles[0];
-      ctx.font="bold 9px 'Rajdhani',monospace";
-      ctx.fillStyle=color;ctx.textAlign="left";ctx.textBaseline="middle";
-      ctx.fillText(label,first.cx+first.rad*0.7+3,first.cy-first.rad*0.7);
+    // Línea discontinua animada encima
+    if(dash){
+      ctx.globalAlpha=fillMode==="border"?1:0.85;
+      ctx.strokeStyle=color;
+      ctx.lineWidth=fillMode==="border"?lineW*1.5:lineW;
+      ctx.setLineDash([5,7]);ctx.lineDashOffset=-(t*15)%12;
+      circles.forEach(({cx,cy,rad})=>{ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.stroke();});
+      ctx.setLineDash([]);ctx.globalAlpha=1;
     }
 
-    // Línea discontinua encima del borde para dar efecto dash
-    if(dash){
-      ctx.globalAlpha=0.9;
-      ctx.strokeStyle=color;ctx.lineWidth=lineW;
-      ctx.setLineDash([5,7]);
-      ctx.lineDashOffset=-(t*15)%12;
-      circles.forEach(({cx,cy,rad})=>{
-        ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.stroke();
-      });
-      ctx.setLineDash([]);
-      ctx.globalAlpha=1;
+    // Etiqueta en el centroide del grupo
+    if(label){
+      ctx.font="bold 9px 'Rajdhani',monospace";
+      ctx.fillStyle=color;ctx.textAlign="left";ctx.textBaseline="middle";
+      const first=circles[0];
+      ctx.fillText(label,first.cx+first.rad*0.7+3,first.cy-first.rad*0.7);
     }
 
     ctx.restore();
   });
+
+  // Devolver centroides de los grupos de movimiento para que los overlays se coloquen ahí
+  return {moveCentroids};
 }
 
 // ─── ARUCO ───────────────────────────────────────────────────────────────────
@@ -936,6 +925,7 @@ function App(){
   const [tab,setTab]=useState("TABLERO");
   const [activeAuras,setActiveAuras]=useState({move:false,charge:false,shoot:false,abilities:false});
   const prevAuras=useRef({move:true,charge:true,shoot:true,abilities:true});
+  const [auraFillMode,setAuraFillMode]=useState("fill"); // "fill" | "border"
   const [activeZone,setActiveZone]=useState(null);
   const [showDeployMenu,setShowDeployMenu]=useState(false);
   const [showLegend,setShowLegend]=useState(false);
@@ -1048,43 +1038,53 @@ function App(){
       ctx.beginPath();ctx.moveTo(x+ox*s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+oy*s);ctx.stroke();
     });
     // Auras fusionadas (antes de las minis para que queden debajo)
-    drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMini);
+    const {moveCentroids=[]}=drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMini,auraFillMode);
     // Minis encima
     minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,W,H,BW,selMini===mini.id,t,auraColors);});
-    // Overlays personalizados — se proyectan dentro del aura de movimiento de cada mini
+    // Overlays personalizados — 1 símbolo por grupo fusionado, centrado en el centroide
     overlays.forEach(ov=>{
       if(!ov.visible||!ov.src)return;
       let img=overlayImgCache.current[ov.id];
       if(!img){img=new Image();img.src=ov.src;overlayImgCache.current[ov.id]=img;}
       if(!img.complete)return;
       const inchPx=W/modeInfo.w;
+
+      // Agrupar minis del overlay por su grupo de movimiento
+      // Usamos el mismo sistema de clave que drawMergedAuras para matchear grupos
+      const minisByGroup={};
       minis.forEach(mini=>{
         if(ov.playerId && mini.playerId!==ov.playerId)return;
         const unit=mini.unitData;if(!unit)return;
-        const cx=mini.x*W,cy=mini.y*H;
-        const mv=parseInt(unit.stats?.M)||6;
         const bsz=(unit.base_size_mm/2/25.4)*inchPx;
-        // Radio exacto del aura de movimiento
-        const rad=mv*inchPx+bsz;
-        // Tamaño de la imagen = diámetro del aura × factor de relleno interior (0.82 deja margen)
+        const mv=parseInt(unit.stats?.M)||6;
+        const rad=bsz+mv*inchPx;
+        const key=`move_${auraColors.move}_${Math.round(rad)}`;
+        if(!minisByGroup[key])minisByGroup[key]=[];
+        minisByGroup[key].push({mini,unit,rad});
+      });
+
+      // Por cada grupo, dibujar un solo símbolo en el centroide
+      Object.values(minisByGroup).forEach(members=>{
+        if(!members.length)return;
+        // Calcular centroide del grupo
+        const circles=members.map(({mini,rad})=>({cx:mini.x*W,cy:mini.y*H,rad}));
+        const centroid=groupCentroid(circles);
+        const rad=members[0].rad;
         const drawR=rad*0.82;
-        const player=players.find(p=>p.id===mini.playerId);
+        const player=players.find(p=>p.id===members[0].mini.playerId);
         const col=player?.color||C.accent;
         const [r,g,b]=h2p(col);
 
         ctx.save();
-        // Fondo del aura coloreado suave
-        ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);
-        ctx.fillStyle=`rgba(${r},${g},${b},0.07)`;ctx.fill();
-
-        // Clip circular — la imagen no sale del aura
-        ctx.beginPath();ctx.arc(cx,cy,drawR,0,Math.PI*2);ctx.clip();
-
-        // Canvas offscreen para tintar la imagen respetando aspect ratio
+        // Fondo coloreado en el centroide
+        ctx.beginPath();ctx.arc(centroid.cx,centroid.cy,drawR,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${r},${g},${b},0.06)`;ctx.fill();
+        // Clip circular
+        ctx.beginPath();ctx.arc(centroid.cx,centroid.cy,drawR,0,Math.PI*2);ctx.clip();
+        // Renderizar imagen tintada con aspect ratio correcto
         const iw=img.naturalWidth||img.width||100;
         const ih=img.naturalHeight||img.height||100;
         const aspect=iw/ih;
-        // Calcular tamaño que encaje en el círculo sin deformar
         let dw,dh;
         if(aspect>=1){dw=drawR*2;dh=dw/aspect;}
         else{dh=drawR*2;dw=dh*aspect;}
@@ -1094,20 +1094,18 @@ function App(){
         const octx=off.getContext('2d');
         const ox=(offSz-dw)/2,oy=(offSz-dh)/2;
         octx.drawImage(img,ox,oy,dw,dh);
-        // Tintar con color del jugador
         octx.globalCompositeOperation='multiply';
         octx.fillStyle=col;octx.fillRect(0,0,offSz,offSz);
         octx.globalCompositeOperation='destination-in';
         octx.drawImage(img,ox,oy,dw,dh);
-
         ctx.globalAlpha=(ov.opacity/100)*0.8;
-        ctx.drawImage(off,cx-offSz/2,cy-offSz/2,offSz,offSz);
+        ctx.drawImage(off,centroid.cx-offSz/2,centroid.cy-offSz/2,offSz,offSz);
         ctx.globalAlpha=1;
         ctx.restore();
       });
     });
     ctx.restore();
-  },[tab,minis,players,selMini,tick,activeAuras,activeZone,modeInfo,zoom,pan,overlays]);
+  },[tab,minis,players,selMini,tick,activeAuras,activeZone,modeInfo,zoom,pan,overlays,auraFillMode,auraColors]);
 
   // Zoom con rueda del ratón
   const handleWheel=(e)=>{
@@ -1301,6 +1299,14 @@ function App(){
                 color:Object.values(activeAuras).some(Boolean)?"#f43f5e":C.green,
                 background:Object.values(activeAuras).some(Boolean)?"rgba(244,63,94,0.05)":"rgba(34,197,94,0.05)"}}>
                 {Object.values(activeAuras).some(Boolean)?"◉ OCULTAR":"○ AURAS"}
+              </button>
+              {/* Toggle modo relleno / solo borde */}
+              <button onClick={()=>setAuraFillMode(m=>m==="fill"?"border":"fill")}
+                className="rb" style={{padding:"3px 10px",fontSize:11,
+                  borderColor:auraFillMode==="border"?C.yellow:C.border,
+                  color:auraFillMode==="border"?C.yellow:C.muted,
+                  background:auraFillMode==="border"?"rgba(251,191,36,0.06)":"transparent"}}>
+                {auraFillMode==="border"?"◻ CONTORNO":"◼ RELLENO"}
               </button>
               <div style={{position:"relative"}} onClick={e=>e.stopPropagation()}>
                 <button onClick={()=>setShowDeployMenu(v=>!v)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:activeZone?C.green:C.border,color:activeZone?C.green:C.muted,background:activeZone?"rgba(34,197,94,.1)":"transparent"}}>
