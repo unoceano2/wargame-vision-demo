@@ -74,6 +74,17 @@ const GAME_SYSTEMS = {
     }},
 };
 
+// ─── TAREAS PENDIENTES ───────────────────────────────────────────────────────
+// TODO: Revisar y corregir zonas de despliegue (drawDeploymentZone)
+//       Las zonas tienen fallos de geometría y posicionamiento de objetivos.
+//       Hay que contrastar cada zona con las cartas físicas:
+//       - Hammer and Anvil: ✓ franja 12" horizontal
+//       - Search and Destroy: revisar triángulos diagonales
+//       - Crucible of Battle: revisar diagonal esquina a esquina
+//       - Dawn of War: revisar franjas verticales 12"
+//       - Sweeping Engagement: revisar diagonal asimétrica
+// ─────────────────────────────────────────────────────────────────────────────
+
 const DEPLOY_ZONES = {
   hammer_and_anvil:    {label:"Hammer and Anvil",    desc:'12" borde largo · 5 objetivos'},
   search_and_destroy:  {label:"Search and Destroy",  desc:'Diagonal · exclusión 9" centro'},
@@ -1107,11 +1118,7 @@ function App(){
     const my=(e.clientY-rect.top)*(canvasRef.current.height/rect.height);
     setZoom(prev=>{
       const nz=Math.max(0.5,Math.min(5,prev*factor));
-      // Zoom centrado en el cursor
-      setPan(pp=>({
-        x:mx-(mx-pp.x)*(nz/prev),
-        y:my-(my-pp.y)*(nz/prev),
-      }));
+      setPan(pp=>({x:mx-(mx-pp.x)*(nz/prev),y:my-(my-pp.y)*(nz/prev)}));
       return nz;
     });
   };
@@ -1119,25 +1126,39 @@ function App(){
   // Reset zoom
   const resetZoom=()=>{setZoom(1);setPan({x:0,y:0});};
 
+  // FIX: soltar mini con mouseUp global en document para que no se pegue al cursor
+  const isDraggingMini=useRef(false);
+  useEffect(()=>{
+    const onUp=()=>{
+      isPanning.current=false;
+      if(isDraggingMini.current){isDraggingMini.current=false;}
+    };
+    document.addEventListener('mouseup',onUp);
+    return()=>document.removeEventListener('mouseup',onUp);
+  },[]);
+
   // Pan con drag (cuando no hay mini seleccionada)
   const handleMouseDown=(e)=>{
-    if(selMini)return;
+    if(selMini){isDraggingMini.current=true;return;}
     isPanning.current=true;
     lastPan.current={x:e.clientX-pan.x*(canvasRef.current.getBoundingClientRect().width/canvasRef.current.width),
                      y:e.clientY-pan.y*(canvasRef.current.getBoundingClientRect().height/canvasRef.current.height)};
   };
   const handleMouseMove=(e)=>{
-    if(e.buttons===1&&selMini){handleCanvasDrag(e);return;}
-    if(!isPanning.current||!e.buttons)return;
+    if(e.buttons===1&&selMini&&isDraggingMini.current){handleCanvasDrag(e);return;}
+    // Si se soltó el botón fuera del canvas, cancelar drag
+    if(!e.buttons){isPanning.current=false;isDraggingMini.current=false;return;}
+    if(!isPanning.current)return;
     const rect=canvasRef.current.getBoundingClientRect();
     const scaleX=canvasRef.current.width/rect.width;
     const scaleY=canvasRef.current.height/rect.height;
-    setPan({
-      x:(e.clientX-lastPan.current.x)*scaleX,
-      y:(e.clientY-lastPan.current.y)*scaleY,
-    });
+    setPan({x:(e.clientX-lastPan.current.x)*scaleX,y:(e.clientY-lastPan.current.y)*scaleY});
   };
-  const handleMouseUp=()=>{isPanning.current=false;};
+  const handleMouseUp=(e)=>{
+    isPanning.current=false;
+    isDraggingMini.current=false;
+    // Click sin drag: toggle selección
+  };
 
   const handleCanvasClick=(e)=>{
     const rect=canvasRef.current.getBoundingClientRect();
@@ -1259,8 +1280,8 @@ function App(){
 
       {/* ══ TABLERO ══ */}
       {tab==="TABLERO"&&(
-        <div style={{padding:14,display:"flex",gap:14}}>
-          <div style={{flex:1,minWidth:0}}>
+        <div style={{padding:14,display:"flex",gap:14,height:"calc(100vh - 110px)",overflow:"hidden"}}>
+          <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",overflow:"hidden"}}>
             <div style={{marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               {[{key:"move",label:"M",color:C.green},{key:"charge",label:"C",color:C.purple},{key:"shoot",label:"AD",color:C.blue},{key:"abilities",label:"HAB",color:C.yellow}].map(({key,label,color})=>{
                 const [r,g,b]=h2p(color);
@@ -1300,14 +1321,27 @@ function App(){
               </div>
               {unassigned>0&&<span className="tag pulse" style={{marginLeft:"auto",background:"rgba(249,115,22,.1)",color:C.accent,border:"1px solid #7c3100"}}>⚠ {unassigned} SIN ASIGNAR</span>}
             </div>
-            {/* Indicador zoom */}
-            {zoom!==1&&(
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                <span style={{fontSize:12,color:C.muted,letterSpacing:1}}>ZOOM {Math.round(zoom*100)}%</span>
-                <button onClick={resetZoom} className="rb" style={{padding:"2px 8px",fontSize:12,letterSpacing:1}}>RESET</button>
+            {/* Etiqueta de tamaño del tablero */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+              marginBottom:4,padding:"3px 6px",background:"rgba(7,15,32,0.8)",
+              borderRadius:2,border:`1px solid ${C.border}`}}>
+              <span style={{fontSize:11,color:C.muted,letterSpacing:1,fontFamily:"'Share Tech Mono',monospace"}}>
+                {modeInfo.w}" × {modeInfo.h}"
+                <span style={{color:C.border,margin:"0 6px"}}>·</span>
+                <span style={{color:C.muted}}>{(modeInfo.w*2.54).toFixed(0)}cm × {(modeInfo.h*2.54).toFixed(0)}cm</span>
+              </span>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {zoom!==1&&<>
+                  <span style={{fontSize:11,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>
+                    {Math.round(zoom*100)}%
+                  </span>
+                  <button onClick={resetZoom} className="rb" style={{padding:"1px 7px",fontSize:11}}>↺</button>
+                </>}
               </div>
-            )}
-            <div style={{position:"relative"}}>
+            </div>
+            {/* Canvas fijo — no empuja la UI */}
+            <div style={{position:"relative",overflow:"hidden",borderRadius:2,
+              border:`1px solid ${C.border}`}}>
               <canvas ref={canvasRef} width={700} height={520}
                 onClick={handleCanvasClick}
                 onMouseDown={handleMouseDown}
@@ -1315,9 +1349,8 @@ function App(){
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
                 onWheel={handleWheel}
-                style={{borderRadius:2,border:`1px solid ${C.border}`,
-                  cursor:selMini?"grabbing":isPanning.current?"grabbing":"grab",
-                  display:"block",width:"100%",height:"auto"}}/>
+                style={{display:"block",width:"100%",height:"auto",
+                  cursor:isDraggingMini.current?"grabbing":selMini?"crosshair":isPanning.current?"grabbing":"grab"}}/>
               {assignMenu&&(
                 <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
                   <div style={{fontSize:12,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
