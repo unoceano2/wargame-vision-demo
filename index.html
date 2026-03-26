@@ -74,15 +74,155 @@ const GAME_SYSTEMS = {
     }},
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// REGLAS WARHAMMER 40,000 — REFERENCIA PARA LA APP
+// Extraídas del libro de reglas físico. Usadas para cálculos de auras,
+// distancias, coherencia, carga y combate.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── DISTANCIAS CLAVE ──────────────────────────────────────────────────────────
+// Engagement Range:          1" horizontal, 5" vertical
+//                            → Dos unidades están en combate si están dentro de 1"
+// Coherencia de unidad:      2" horizontal, 5" vertical de AL MENOS 1 modelo (unidades 2-6)
+//                            2" horizontal, 5" vertical de AL MENOS 2 modelos (unidades 7+)
+// Rango de carga:            2D6" (media 7"). La unidad debe poder acabar a 1" del objetivo.
+// Pile In:                   hasta 3" hacia el modelo enemigo más cercano
+// Consolidate:               hasta 3" hacia el modelo enemigo más cercano
+//                            (o hacia el objetivo más cercano si no hay enemigos)
+// Terrain ≤ 2":              los modelos pueden moverse sobre él libremente
+// Terrain > 2":              los modelos pueden escalar pero cuentan la distancia vertical
+
+// ── FASES DE TURNO ────────────────────────────────────────────────────────────
+// 1. MOVIMIENTO
+//    - Normal Move: hasta M" (no puede terminar en Engagement Range de enemigos)
+//    - Advance:     M + D6" (no puede disparar ni cargar ese turno)
+//    - Fall Back:   hasta M" (puede atravesar enemigos con Desperate Escape tests,
+//                             1D6 por modelo que cruce: en 1-2, ese modelo es destruido)
+//    - Remain Stationary: no mueve. Puede Avanzar/Fall Back en fases siguientes.
+//
+// 2. CARGA (Charge Phase)
+//    - Elegible: unidad a ≤12" de unidades enemigas (no necesita línea de visión)
+//    - Roll: 2D6. Debe ser suficiente para acabar a 1" (Engagement Range) del objetivo
+//    - Charge Bonus: al final del turno, unidad tiene "Fights First" hasta fin de turno
+//    - FLY: mide "por el aire" (distancia diagonal si sube/baja terreno)
+//    - Terreno >2": cuenta distancia vertical de subida y bajada
+//
+// 3. COMBATE (Fight Phase)
+//    - Paso 1 — FIGHTS FIRST: unidades con esa habilidad + unidades que cargaron
+//    - Paso 2 — REMAINING COMBATS: resto de unidades elegibles
+//    - Elegible para combatir: dentro de Engagement Range de enemigos,
+//                              O hizo una carga este turno
+//    - Pile In: cada modelo mueve ≤3" hacia el modelo enemigo más cercano
+//      (debe acabar más cerca del enemigo más cercano y en coherencia de unidad)
+//    - Select Targets: modelos dentro de Engagement Range del enemigo,
+//      O en contacto base a base con un modelo de su propia unidad que SÍ esté en ER
+//    - Consolidate: ≤3" hacia el modelo enemigo más cercano
+//      (si no hay enemigos, hacia el objetivo más cercano)
+
+// ── COHERENCIA DE UNIDAD ─────────────────────────────────────────────────────
+// Unidades 2-6 modelos: cada modelo a ≤2" horizontal y ≤5" vertical de ≥1 modelo
+// Unidades 7+ modelos:  cada modelo a ≤2" horizontal y ≤5" vertical de ≥2 modelos
+// Si no puede mantener coherencia al final de un movimiento → no puede hacer ese movimiento
+// Al final del turno: si no está en coherencia, eliminar modelos hasta que lo esté
+// Modelos eliminados así cuentan como destruidos pero NO activan reglas de "al ser destruido"
+
+// ── IMPLICACIONES PARA LA APP ─────────────────────────────────────────────────
+// Aura de Engagement Range:  1" desde el borde de la peana → zona de combate
+// Aura de Carga:             M + 7" (media 2D6) desde borde de peana
+// Coherencia visual:         2" entre modelos del mismo jugador (futuro: alertar si >2")
+// Pile In / Consolidate:     3" adicionales al movimiento en fase de combate
+// Advance range:             M + D6" → mostrar como M + 3.5" promedio (o M+1 a M+6)
+
+// ── CONVENCIONES DE MEDIDA ───────────────────────────────────────────────────
+// Todas las distancias se miden de borde de peana a borde de peana
+// 1" = 25.4mm = 1 pulgada
+// Los vuelos (FLY) miden distancia en línea recta por el aire
+// Para el canvas: inchPx = canvasWidth / boardWidth_in_inches
+
 // ─── TAREAS PENDIENTES ───────────────────────────────────────────────────────
-// TODO: Revisar y corregir zonas de despliegue (drawDeploymentZone)
-//       Las zonas tienen fallos de geometría y posicionamiento de objetivos.
-//       Hay que contrastar cada zona con las cartas físicas:
-//       - Hammer and Anvil: ✓ franja 12" horizontal
-//       - Search and Destroy: revisar triángulos diagonales
-//       - Crucible of Battle: revisar diagonal esquina a esquina
-//       - Dawn of War: revisar franjas verticales 12"
-//       - Sweeping Engagement: revisar diagonal asimétrica
+//
+// TODO-1: Zonas de despliegue (drawDeploymentZone)
+//         Las zonas tienen fallos de geometría y posicionamiento de objetivos.
+//         Contrastar cada zona con las cartas físicas:
+//         - Hammer and Anvil: franja 12" horizontal (revisar)
+//         - Search and Destroy: revisar triángulos diagonales
+//         - Crucible of Battle: revisar diagonal esquina a esquina
+//         - Dawn of War: revisar franjas verticales 12"
+//         - Sweeping Engagement: revisar diagonal asimétrica
+//
+// TODO-2: ✅ COMPLETADO — Fit-to-screen por defecto
+//         Al cargar o al hacer RESET, calcular el zoom inicial para que el
+//         tablero completo quepa en el canvas visible del dispositivo.
+//         Fórmula: zoom = min(canvasW/boardW, canvasH/boardH) * 0.95
+//
+// TODO-3: ✅ COMPLETADO — Diferenciar auras por jugador (tinte color jugador + grupos separados)
+//         Cuando las auras de J1 y J2 se tocan, actualmente no se distinguen.
+//         Opciones a explorar:
+//         a) Separar grupos por playerId además de por tipo/radio
+//         b) Usar línea de diferente patrón de dash por jugador
+//         c) Colorear el área de intersección con un color de conflicto
+//
+// TODO-4: Persistencia de imágenes de proyección
+//         Las imágenes subidas en CONFIG > Proyección se pierden al recargar.
+//         Guardar en localStorage (base64) para recuperarlas entre sesiones.
+//         Añadir botón "eliminar imagen guardada" en la lista.
+//
+// TODO-5: Selector rectangular de múltiples minis
+//         Drag sin mini seleccionada = rectángulo de selección.
+//         Las minis dentro del rectángulo quedan seleccionadas (selMinis[]).
+//         Mover el grupo arrastrando cualquier mini del grupo seleccionado.
+//         Escape o click fuera = deseleccionar.
+//
+// TODO-6: ✅ COMPLETADO — Líneas internas en modo contorno (dash solo sobre borde exterior)
+//         En modo "border" (sin relleno) aún se ven las líneas discontinuas
+//         interiores donde los círculos se superponen.
+//         Fix: en modo border, dibujar el dash SOLO sobre el borde exterior
+//         fusionado (usar clip con la forma del borde, no círculos individuales)
+//
+// TODO-7: ✅ COMPLETADO — Aura de Engagement Range (1")
+//         Añadir un nuevo tipo de aura: zona de combate cuerpo a cuerpo.
+//         Radio = 1" desde el borde de la peana (borde a borde entre modelos).
+//         Color sugerido: rojo (#f43f5e), círculo sólido fino.
+//         Solo visible cuando la aura de combate está activada.
+//         Referencia reglas: un modelo puede luchar si está dentro de 1" horizontal
+//         y 5" vertical de un modelo enemigo.
+//
+// TODO-8: ✅ COMPLETADO — Alerta visual de coherencia de unidad
+//         Si dos figuras de la misma unidad se separan más de 2" entre sí,
+//         mostrar una línea de alerta (roja/naranja) entre ellas o un indicador
+//         en la peana. Reglas: unidades 2-6 → 1 vecino a ≤2"; unidades 7+ → 2 vecinos.
+//         El sistema debe calcular el grafo de distancias entre figuras del mismo
+//         tipo/unidad y detectar qué figuras rompen la coherencia.
+//
+// TODO-9: Calibración de cámara sin ArUco (sin impresora)
+//         PROBLEMA: Los marcadores ArUco requieren impresora. La mayoría de usuarios
+//         no tiene impresora o no quiere pegar papeles en su tapete.
+//
+//         SOLUCIÓN PRINCIPAL — Calibración manual con 4 clicks:
+//         1. El usuario activa el modo calibración en la app
+//         2. La app muestra la imagen de la cámara en pantalla
+//         3. Aparece un overlay con instrucciones: "Haz click en la esquina
+//            Superior-Izquierda del tablero"
+//         4. El usuario hace click en las 4 esquinas del tablero físico
+//            que ve en la imagen de la cámara (en orden: TL → TR → BR → BL)
+//         5. La app calcula la homografía con esos 4 puntos
+//         6. La calibración queda guardada en localStorage
+//         7. Si la cámara se mueve: botón "Recalibrar" repite el proceso en ~10s
+//
+//         SOLUCIÓN SECUNDARIA — Detección automática del borde del tapete:
+//         Usando OpenCV en Python (script de calibración):
+//         - Detectar el rectángulo más grande en la imagen por contraste de color
+//         - Funciona cuando el tapete contrasta bien con la mesa
+//         - Si falla, caer back a la calibración manual
+//
+//         IMPLEMENTACIÓN:
+//         - En la app web: modal de calibración con canvas sobre el feed de cámara,
+//           4 puntos clickeables, cálculo de homografía en JS (perspectiveTransform)
+//         - En el script Python: recibe los 4 puntos desde la app via WebSocket
+//           o los calcula por detección automática de contornos
+//         - La homografía permite convertir coordenadas píxel → pulgadas reales
+//           para posicionar las minis en el tablero digital
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DEPLOY_ZONES = {
@@ -388,6 +528,58 @@ function drawUnit(ctx,mini,unit,playerColor,W,H,BW,selected,t,auraColors){
 }
 
 // Calcula el centroide ponderado de un grupo de círculos (centro de masa por área)
+// TODO-8: ✅ COMPLETADO — Alerta visual de coherencia de unidad
+// Dibuja líneas de alerta entre figuras de la misma unidad que están a >2"
+function drawCoherency(ctx,minis,W,H,BW){
+  const inchPx=W/BW;
+  const coherenceInch=2; // regla: 2" entre figuras
+  // Agrupar minis por (playerId, unitId)
+  const byUnit={};
+  minis.forEach(mini=>{
+    if(!mini.unitData)return;
+    const key=`${mini.playerId}_${mini.unitData.id}`;
+    if(!byUnit[key])byUnit[key]=[];
+    byUnit[key].push(mini);
+  });
+  Object.values(byUnit).forEach(group=>{
+    if(group.length<2)return;
+    const count=group.length;
+    const required=count>=7?2:1; // 7+ modelos necesitan 2 vecinos a ≤2"
+    group.forEach((mini,i)=>{
+      const cx=mini.x*W,cy=mini.y*H;
+      const bsz=(mini.unitData.base_size_mm/2/25.4)*inchPx;
+      // Distancias a todos los demás del grupo (borde a borde)
+      const distances=group
+        .filter((_,j)=>j!==i)
+        .map(other=>{
+          const ox=other.x*W,oy=other.y*H;
+          const obz=(other.unitData.base_size_mm/2/25.4)*inchPx;
+          const dist=Math.hypot(cx-ox,cy-oy)-(bsz+obz); // borde a borde
+          return {other,dist,ox,oy};
+        })
+        .sort((a,b)=>a.dist-b.dist);
+      // Contar cuántos vecinos están a ≤2"
+      const nearCount=distances.filter(d=>d.dist<=coherenceInch*inchPx).length;
+      if(nearCount<required){
+        // Dibujar alerta — línea al vecino más cercano fuera de rango
+        distances.slice(0,required).forEach(({dist,ox,oy})=>{
+          if(dist>coherenceInch*inchPx){
+            ctx.save();
+            ctx.strokeStyle="#f97316";ctx.lineWidth=1;
+            ctx.setLineDash([3,4]);ctx.globalAlpha=0.7;
+            ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ox,oy);ctx.stroke();
+            ctx.setLineDash([]);
+            // Indicador en la mini fuera de coherencia
+            ctx.beginPath();ctx.arc(cx,cy,bsz+2,0,Math.PI*2);
+            ctx.strokeStyle="#f97316";ctx.lineWidth=1.5;ctx.globalAlpha=0.9;ctx.stroke();
+            ctx.restore();
+          }
+        });
+      }
+    });
+  });
+}
+
 function groupCentroid(circles){
   let wx=0,wy=0,totalW=0;
   circles.forEach(({cx,cy,rad})=>{
@@ -400,109 +592,120 @@ function groupCentroid(circles){
 // Devuelve {cx,cy} del centroide del grupo de movimiento (para colocar overlays)
 // y dibuja las auras fusionadas. fillMode: "fill" | "border"
 function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMini,fillMode){
-  if(!activeAuras.move&&!activeAuras.charge&&!activeAuras.shoot&&!activeAuras.abilities) return {};
+  if(!activeAuras.move&&!activeAuras.charge&&!activeAuras.shoot&&!activeAuras.abilities&&!activeAuras.engage) return {};
   const inchPx=W/BW;
   const groups={};
 
-  const addCircle=(key,cx,cy,rad,color,label,dash,lineW)=>{
-    if(!groups[key])groups[key]={circles:[],color,label,dash,lineW};
-    groups[key].circles.push({cx,cy,rad});
+  // TODO-3 FIX: clave incluye playerId para separar auras de cada jugador
+  const addCircle=(key,cx,cy,rad,color,label,dash,lineW,pid)=>{
+    const fk=`${pid||'x'}_${key}`;
+    if(!groups[fk])groups[fk]={circles:[],color,label,dash,lineW};
+    groups[fk].circles.push({cx,cy,rad});
+  };
+
+  // Mezcla color de aura con color del jugador (35%) para diferenciar J1/J2
+  const tintAura=(auraCol,playerCol)=>{
+    if(!playerCol) return auraCol;
+    const [ar,ag,ab]=h2p(auraCol),[pr,pg,pb]=h2p(playerCol);
+    const m=(a,b,f)=>Math.round(a*(1-f)+b*f).toString(16).padStart(2,'0');
+    return `#${m(ar,pr,0.35)}${m(ag,pg,0.35)}${m(ab,pb,0.35)}`;
   };
 
   minis.forEach(mini=>{
     const unit=mini.unitData;if(!unit)return;
+    const player=players.find(p=>p.id===mini.playerId);
+    const pid=mini.playerId,pc=player?.color;
     const cx=mini.x*W,cy=mini.y*H;
     const bsz=(unit.base_size_mm/2/25.4)*inchPx;
     const mv=parseInt(unit.stats?.M)||6;
+    if(activeAuras.engage){
+      addCircle(`engage_${Math.round(bsz+inchPx)}`,cx,cy,bsz+inchPx,tintAura("#f43f5e",pc),'ER 1"',false,1.5,pid);
+    }
     if(activeAuras.shoot){
       const mr=Math.max(0,...(unit.ranged_weapons||[]).map(w=>w.range_inches||0));
-      if(mr>0) addCircle(`shoot_${auraColors.shoot}_${Math.round(bsz+mr*inchPx)}`,cx,cy,bsz+mr*inchPx,auraColors.shoot,`AD ${mr}"`,true,1);
+      if(mr>0) addCircle(`shoot_${Math.round(bsz+mr*inchPx)}`,cx,cy,bsz+mr*inchPx,tintAura(auraColors.shoot,pc),`AD ${mr}"`,true,1,pid);
     }
     if(activeAuras.move){
       const rad=bsz+mv*inchPx;
-      addCircle(`move_${auraColors.move}_${Math.round(rad)}`,cx,cy,rad,auraColors.move,`M ${mv}"`,true,1.5);
+      addCircle(`move_${Math.round(rad)}`,cx,cy,rad,tintAura(auraColors.move,pc),`M ${mv}"`,true,1.5,pid);
     }
     if(activeAuras.charge){
       const rad=bsz+(mv+7)*inchPx;
-      addCircle(`charge_${auraColors.charge}_${Math.round(rad)}`,cx,cy,rad,auraColors.charge,null,true,1);
+      addCircle(`charge_${Math.round(rad)}`,cx,cy,rad,tintAura(auraColors.charge,pc),null,true,1,pid);
     }
     if(activeAuras.abilities){
       (unit.abilities||[]).forEach(ab=>{
         if(!ab.aura||!ab.aura.radius_inches)return;
         const col=ab.aura.color||auraColors.abilities;
         const rad=bsz+ab.aura.radius_inches*inchPx;
-        addCircle(`hab_${ab.name}_${col}`,cx,cy,rad,col,ab.aura.display_text,false,1.5);
+        addCircle(`hab_${ab.name}_${col}`,cx,cy,rad,col,ab.aura.display_text,false,1.5,pid);
       });
     }
   });
 
-  // Acumular centroides de grupos de movimiento para devolver a los overlays
   const moveCentroids=[];
 
   Object.entries(groups).forEach(([key,{circles,color,label,dash,lineW}])=>{
     if(!circles.length)return;
     const [r,g,b]=h2p(color);
-    const isMoveGroup=key.startsWith("move_");
-
-    // Calcular centroide del grupo (para label y overlays)
+    const isMoveGroup=key.includes('_move_');
     const centroid=groupCentroid(circles);
-    if(isMoveGroup) moveCentroids.push({...centroid, rad:circles[0].rad, circles});
+    if(isMoveGroup) moveCentroids.push({...centroid,rad:circles[0].rad,circles});
 
     ctx.save();
 
-    // ── MODO RELLENO ──────────────────────────────────────────────────────
-    if(fillMode==="fill"){
-      // Relleno semitransparente de cada círculo
-      ctx.globalAlpha=0.07;
-      ctx.fillStyle=`rgb(${r},${g},${b})`;
+    if(fillMode==='fill'){
+      ctx.globalAlpha=0.07;ctx.fillStyle=`rgb(${r},${g},${b})`;
       circles.forEach(({cx,cy,rad})=>{ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fill();});
       ctx.globalAlpha=1;
     }
 
-    // ── BORDE EXTERIOR FUSIONADO (ambos modos) ───────────────────────────
-    // Canvas offscreen: unión de círculos → erosión → borde coloreado
+    const bw=Math.max(1.5,lineW*2);
     const bOff=document.createElement('canvas');
     bOff.width=W;bOff.height=H;
     const bctx=bOff.getContext('2d');
-    const bw=Math.max(1.5,lineW*2);
-    // Relleno blanco de la unión
-    bctx.fillStyle="#fff";
+    bctx.fillStyle='#fff';
     circles.forEach(({cx,cy,rad})=>{bctx.beginPath();bctx.arc(cx,cy,rad,0,Math.PI*2);bctx.fill();});
-    // Erosionar interior para quedarse solo con el borde
     bctx.globalCompositeOperation='destination-out';
     circles.forEach(({cx,cy,rad})=>{bctx.beginPath();bctx.arc(cx,cy,Math.max(0,rad-bw),0,Math.PI*2);bctx.fill();});
-    // Colorear el borde
     bctx.globalCompositeOperation='source-in';
-    bctx.fillStyle=color;
-    bctx.fillRect(0,0,W,H);
+    bctx.fillStyle=color;bctx.fillRect(0,0,W,H);
+    ctx.shadowColor=color;ctx.shadowBlur=fillMode==='border'?8:4;
+    ctx.drawImage(bOff,0,0);ctx.shadowBlur=0;
 
-    ctx.shadowColor=color;
-    ctx.shadowBlur=fillMode==="border"?8:4;
-    ctx.drawImage(bOff,0,0);
-    ctx.shadowBlur=0;
-
-    // Línea discontinua animada encima
     if(dash){
-      ctx.globalAlpha=fillMode==="border"?1:0.85;
-      ctx.strokeStyle=color;
-      ctx.lineWidth=fillMode==="border"?lineW*1.5:lineW;
-      ctx.setLineDash([5,7]);ctx.lineDashOffset=-(t*15)%12;
-      circles.forEach(({cx,cy,rad})=>{ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.stroke();});
-      ctx.setLineDash([]);ctx.globalAlpha=1;
+      if(fillMode==='border'){
+        // TODO-6 FIX: dash solo sobre el borde exterior fusionado usando máscara offscreen
+        const dOff=document.createElement('canvas');
+        dOff.width=W;dOff.height=H;
+        const dctx=dOff.getContext('2d');
+        dctx.fillStyle='#fff';
+        circles.forEach(({cx,cy,rad})=>{dctx.beginPath();dctx.arc(cx,cy,rad,0,Math.PI*2);dctx.fill();});
+        dctx.globalCompositeOperation='destination-out';
+        circles.forEach(({cx,cy,rad})=>{dctx.beginPath();dctx.arc(cx,cy,Math.max(0,rad-bw*2),0,Math.PI*2);dctx.fill();});
+        dctx.globalCompositeOperation='source-in';
+        dctx.strokeStyle=color;dctx.lineWidth=lineW*1.5;
+        dctx.setLineDash([5,7]);dctx.lineDashOffset=-(t*15)%12;
+        circles.forEach(({cx,cy,rad})=>{dctx.beginPath();dctx.arc(cx,cy,rad,0,Math.PI*2);dctx.stroke();});
+        dctx.setLineDash([]);
+        ctx.drawImage(dOff,0,0);
+      } else {
+        ctx.globalAlpha=0.85;ctx.strokeStyle=color;ctx.lineWidth=lineW;
+        ctx.setLineDash([5,7]);ctx.lineDashOffset=-(t*15)%12;
+        circles.forEach(({cx,cy,rad})=>{ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.stroke();});
+        ctx.setLineDash([]);ctx.globalAlpha=1;
+      }
     }
 
-    // Etiqueta en el centroide del grupo
     if(label){
-      ctx.font="bold 9px 'Rajdhani',monospace";
-      ctx.fillStyle=color;ctx.textAlign="left";ctx.textBaseline="middle";
+      ctx.font='bold 9px \'Rajdhani\',monospace';
+      ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';
       const first=circles[0];
       ctx.fillText(label,first.cx+first.rad*0.7+3,first.cy-first.rad*0.7);
     }
-
     ctx.restore();
   });
 
-  // Devolver centroides de los grupos de movimiento para que los overlays se coloquen ahí
   return {moveCentroids};
 }
 
@@ -923,8 +1126,8 @@ function App(){
   const [selMini,setSelMini]=useState(null);
   const [assignMenu,setAssignMenu]=useState(null);
   const [tab,setTab]=useState("TABLERO");
-  const [activeAuras,setActiveAuras]=useState({move:false,charge:false,shoot:false,abilities:false});
-  const prevAuras=useRef({move:true,charge:true,shoot:true,abilities:true});
+  const [activeAuras,setActiveAuras]=useState({move:false,charge:false,shoot:false,abilities:false,engage:false});
+  const prevAuras=useRef({move:true,charge:true,shoot:true,abilities:true,engage:false});
   const [auraFillMode,setAuraFillMode]=useState("fill"); // "fill" | "border"
   const [activeZone,setActiveZone]=useState(null);
   const [showDeployMenu,setShowDeployMenu]=useState(false);
@@ -1041,6 +1244,8 @@ function App(){
     const {moveCentroids=[]}=drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMini,auraFillMode);
     // Minis encima
     minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,W,H,BW,selMini===mini.id,t,auraColors);});
+    // TODO-8: Alertas de coherencia de unidad (2")
+    drawCoherency(ctx,minis,W,H,BW);
     // Overlays personalizados — 1 símbolo por grupo fusionado, centrado en el centroide
     overlays.forEach(ov=>{
       if(!ov.visible||!ov.src)return;
@@ -1122,7 +1327,16 @@ function App(){
   };
 
   // Reset zoom
-  const resetZoom=()=>{setZoom(1);setPan({x:0,y:0});};
+  // TODO-2: Fit-to-screen — calcula zoom para que el tablero llene el canvas visible
+  const fitToScreen=()=>{
+    const canvas=canvasRef.current;if(!canvas)return;
+    const rect=canvas.getBoundingClientRect();
+    const CW=canvas.width,CH=canvas.height;
+    const fitZoom=Math.min(CW/CW,CH/CH)*0.95; // base
+    // El tablero siempre ocupa todo el canvas (700x520) así que zoom=0.95 lo deja con margen
+    setZoom(0.95);setPan({x:CW*0.025,y:CH*0.025});
+  };
+  const resetZoom=()=>fitToScreen();
 
   // FIX: soltar mini con mouseUp global en document para que no se pegue al cursor
   const isDraggingMini=useRef(false);
@@ -1281,7 +1495,7 @@ function App(){
         <div style={{padding:14,display:"flex",gap:14,height:"calc(100vh - 110px)",overflow:"hidden"}}>
           <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",overflow:"hidden"}}>
             <div style={{marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-              {[{key:"move",label:"M",color:C.green},{key:"charge",label:"C",color:C.purple},{key:"shoot",label:"AD",color:C.blue},{key:"abilities",label:"HAB",color:C.yellow}].map(({key,label,color})=>{
+              {[{key:"move",label:"M",color:C.green},{key:"charge",label:"C",color:C.purple},{key:"shoot",label:"AD",color:C.blue},{key:"abilities",label:"HAB",color:C.yellow},{key:"engage",label:"ER",color:C.red}].map(({key,label,color})=>{
                 const [r,g,b]=h2p(color);
                 return(<button key={key} onClick={()=>setActiveAuras(prev=>({...prev,[key]:!prev[key]}))}
                   style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:2,cursor:"pointer",border:`1px solid ${activeAuras[key]?color:C.border}`,background:activeAuras[key]?`rgba(${r},${g},${b},.1)`:"transparent",color:activeAuras[key]?color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
@@ -1571,6 +1785,7 @@ function App(){
               {key:"charge",  label:"Carga (C)"},
               {key:"shoot",   label:"Disparo (AD)"},
               {key:"abilities",label:"Habilidades (HAB)"},
+              {key:"engage",  label:"Engagement Range (ER)"},
             ].map(({key,label})=>(
               <div key={key} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
                 <div style={{position:"relative",flexShrink:0}}>
