@@ -162,7 +162,7 @@ const GAME_SYSTEMS = {
 //          Fix: recortar la posición del texto para que siempre quede dentro
 //          del área visible del tablero (clamp entre 0+padding y LW-padding).
 //
-// TODO-13: Desajuste de imágenes de overlay con el nuevo sistema de coordenadas
+// TODO-13: ✅ COMPLETADO — Desajuste de imágenes de overlay con el nuevo sistema de coordenadas
 //          Con el nuevo baseScale+baseOffset, las imágenes de proyección
 //          (logos, símbolos de facción) no coinciden con las auras de movimiento.
 //          El cálculo del centroide y el clip circular usan las coordenadas del
@@ -189,7 +189,7 @@ const GAME_SYSTEMS = {
 //         b) Usar línea de diferente patrón de dash por jugador
 //         c) Colorear el área de intersección con un color de conflicto
 //
-// TODO-4: Persistencia de imágenes de proyección
+// TODO-4: ✅ COMPLETADO — Persistencia de imágenes de proyección en localStorage
 //         Las imágenes subidas en CONFIG > Proyección se pierden al recargar.
 //         Guardar en localStorage (base64) para recuperarlas entre sesiones.
 //         Añadir botón "eliminar imagen guardada" en la lista.
@@ -877,26 +877,48 @@ function OverlayManager({overlays,setOverlays,players}){
   const fileRef=useRef(null);
   const [selId,setSelId]=useState(null);
 
+  // TODO-4: Persistir overlays en localStorage (src en base64)
+  const STORAGE_KEY='wargame_overlays_v1';
+
+  const saveToStorage=(list)=>{
+    try{
+      // Guardar solo los campos necesarios (src puede ser grande — base64)
+      const toSave=list.map(o=>({id:o.id,name:o.name,src:o.src,playerId:o.playerId,opacity:o.opacity,visible:o.visible}));
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(toSave));
+    }catch(e){console.warn('Overlay storage error:',e);}
+  };
+
   const addOverlay=(e)=>{
     const file=e.target.files[0];if(!file)return;
     const reader=new FileReader();
     reader.onload=ev=>{
       const id=`ov_${Date.now()}`;
-      setOverlays(prev=>[...prev,{
-        id,name:file.name.replace(/\.[^.]+$/,""),
-        src:ev.target.result,
-        playerId:null, // null = todas las minis
-        opacity:70,
-        visible:true,
-      }]);
+      const newOv={id,name:file.name.replace(/\.[^.]+$/,""),src:ev.target.result,playerId:null,opacity:70,visible:true};
+      setOverlays(prev=>{
+        const next=[...prev,newOv];
+        saveToStorage(next);
+        return next;
+      });
       setSelId(id);
     };
     reader.readAsDataURL(file);
     e.target.value="";
   };
 
-  const update=(id,key,val)=>setOverlays(prev=>prev.map(o=>o.id===id?{...o,[key]:val}:o));
-  const remove=(id)=>{setOverlays(prev=>prev.filter(o=>o.id!==id));if(selId===id)setSelId(null);};
+  const update=(id,key,val)=>setOverlays(prev=>{
+    const next=prev.map(o=>o.id===id?{...o,[key]:val}:o);
+    saveToStorage(next);
+    return next;
+  });
+
+  const remove=(id)=>{
+    setOverlays(prev=>{
+      const next=prev.filter(o=>o.id!==id);
+      saveToStorage(next);
+      return next;
+    });
+    if(selId===id)setSelId(null);
+  };
 
   const sel=overlays.find(o=>o.id===selId);
 
@@ -987,8 +1009,20 @@ function OverlayManager({overlays,setOverlays,players}){
       </button>
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp"
         style={{display:"none"}} onChange={addOverlay}/>
-      <div style={{marginTop:6,fontSize:11,color:C.muted,letterSpacing:1}}>
-        PNG, JPG, SVG, WebP · Se proyecta sobre el tablero en pantalla y proyector
+      <div style={{marginTop:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:11,color:C.muted,letterSpacing:1}}>
+          PNG, JPG, SVG, WebP · {overlays.length>0?`${overlays.length} guardada${overlays.length>1?"s":""} en local`:"Se guardan automáticamente"}
+        </span>
+        {overlays.length>0&&(
+          <button onClick={()=>{setOverlays([]);localStorage.removeItem('wargame_overlays_v1');setSelId(null);}}
+            style={{padding:"2px 7px",background:"transparent",border:`1px solid ${C.border}`,
+              borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",
+              fontSize:10,letterSpacing:1}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red;e.currentTarget.style.color=C.red;}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
+            LIMPIAR TODO
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1235,7 +1269,13 @@ function App(){
   const [selUnit,setSelUnit]=useState(null);
   const [patrols,setPatrols]=useState(EMBEDDED_PATROLS);
   // Overlays personalizados (logos, imágenes)
-  const [overlays,setOverlays]=useState([]);
+  // TODO-4: Cargar overlays persistidos desde localStorage al iniciar
+  const [overlays,setOverlays]=useState(()=>{
+    try{
+      const saved=localStorage.getItem('wargame_overlays_v1');
+      return saved?JSON.parse(saved):[];
+    }catch{return[];}
+  });
   const overlayImgCache=useRef({});
   // Colores de auras configurables
   const [auraColors,setAuraColors]=useState({
@@ -1428,8 +1468,7 @@ function App(){
       if(!img.complete)return;
       const inchPx=LW/modeInfo.w;
 
-      // Agrupar minis del overlay por su grupo de movimiento
-      // Usamos el mismo sistema de clave que drawMergedAuras para matchear grupos
+      // Agrupar minis por grupo de movimiento — misma clave que drawMergedAuras (pid_move_rad)
       const minisByGroup={};
       minis.forEach(mini=>{
         if(ov.playerId && mini.playerId!==ov.playerId)return;
@@ -1437,16 +1476,15 @@ function App(){
         const bsz=(unit.base_size_mm/2/25.4)*inchPx;
         const mv=parseInt(unit.stats?.M)||6;
         const rad=bsz+mv*inchPx;
-        const key=`move_${auraColors.move}_${Math.round(rad)}`;
+        const key=`${mini.playerId||'x'}_move_${Math.round(rad)}`;
         if(!minisByGroup[key])minisByGroup[key]=[];
         minisByGroup[key].push({mini,unit,rad});
       });
 
-      // Por cada grupo, dibujar un solo símbolo en el centroide
+      // Por cada grupo, un símbolo centrado en el centroide — coordenadas en espacio LW×LH
       Object.values(minisByGroup).forEach(members=>{
         if(!members.length)return;
-        // Calcular centroide del grupo
-        const circles=members.map(({mini,rad})=>({cx:mini.x*W,cy:mini.y*H,rad}));
+        const circles=members.map(({mini,rad})=>({cx:mini.x*LW,cy:mini.y*LH,rad}));
         const centroid=groupCentroid(circles);
         const rad=members[0].rad;
         const drawR=rad*0.82;
@@ -1455,12 +1493,9 @@ function App(){
         const [r,g,b]=h2p(col);
 
         ctx.save();
-        // Fondo coloreado en el centroide
         ctx.beginPath();ctx.arc(centroid.cx,centroid.cy,drawR,0,Math.PI*2);
         ctx.fillStyle=`rgba(${r},${g},${b},0.06)`;ctx.fill();
-        // Clip circular
         ctx.beginPath();ctx.arc(centroid.cx,centroid.cy,drawR,0,Math.PI*2);ctx.clip();
-        // Renderizar imagen tintada con aspect ratio correcto
         const iw=img.naturalWidth||img.width||100;
         const ih=img.naturalHeight||img.height||100;
         const aspect=iw/ih;
