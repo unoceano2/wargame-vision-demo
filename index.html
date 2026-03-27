@@ -1614,9 +1614,9 @@ function App(){
                 </>}
               </div>
             </div>
-            {/* Canvas — mantiene aspect ratio 700:520 del tablero */}
+            {/* Canvas — aspect ratio 44:30 del tablero de Combat Patrol */}
             <div style={{position:"relative",overflow:"hidden",borderRadius:2,
-              border:`1px solid ${C.border}`,flex:"0 0 auto"}}>
+              border:`1px solid ${C.border}`,flex:"0 0 auto",width:"100%"}}>
               <canvas ref={canvasRef} width={700} height={520}
                 onClick={handleCanvasClick}
                 onMouseDown={handleMouseDown}
@@ -1625,6 +1625,7 @@ function App(){
                 onMouseLeave={handleMouseUp}
                 onWheel={handleWheel}
                 style={{display:"block",width:"100%",height:"auto",
+                  aspectRatio:"700/520",maxHeight:"calc(100vh - 160px)",
                   cursor:isDraggingMini.current?"grabbing":selMini?"crosshair":isPanning.current?"grabbing":"grab"}}/>
               {assignMenu&&(
                 <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
