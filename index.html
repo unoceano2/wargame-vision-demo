@@ -249,7 +249,7 @@ const GAME_SYSTEMS = {
 //         El sistema debe calcular el grafo de distancias entre figuras del mismo
 //         tipo/unidad y detectar qué figuras rompen la coherencia.
 //
-// TODO-9: Calibración de cámara sin ArUco (sin impresora)
+// TODO-9: ✅ COMPLETADO — Calibración de cámara con 4 clicks en esquinas del tapete
 //         PROBLEMA: Los marcadores ArUco requieren impresora. La mayoría de usuarios
 //         no tiene impresora o no quiere pegar papeles en su tapete.
 //
@@ -1245,6 +1245,167 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// ─── CALIBRACIÓN DE CÁMARA (TODO-9) ─────────────────────────────────────────
+// 4 clicks en las esquinas del tapete → homografía → proyección calibrada
+const CALIB_KEY='wargame_calibration_v1';
+const CALIB_CORNERS=['↖ Superior Izquierda','↗ Superior Derecha','↘ Inferior Derecha','↙ Inferior Izquierda'];
+
+function CameraCalibration(){
+  const videoRef=useRef(null);
+  const canvasRef=useRef(null);
+  const streamRef=useRef(null);
+  const [active,setActive]=useState(false);
+  const [points,setPoints]=useState([]); // hasta 4 puntos {x,y} en px del canvas
+  const [calibrated,setCalibrated]=useState(false);
+  const [savedCalib,setSavedCalib]=useState(()=>{
+    try{const s=localStorage.getItem(CALIB_KEY);return s?JSON.parse(s):null;}catch{return null;}
+  });
+
+  // Arrancar cámara
+  const startCamera=async()=>{
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+      streamRef.current=stream;
+      if(videoRef.current){videoRef.current.srcObject=stream;videoRef.current.play();}
+      setActive(true);setPoints([]);setCalibrated(false);
+    }catch(e){alert('No se pudo acceder a la cámara: '+e.message);}
+  };
+
+  const stopCamera=()=>{
+    streamRef.current?.getTracks().forEach(t=>t.stop());
+    streamRef.current=null;setActive(false);setPoints([]);
+  };
+
+  useEffect(()=>()=>streamRef.current?.getTracks().forEach(t=>t.stop()),[]);
+
+  // Dibujar frame + puntos sobre el canvas
+  useEffect(()=>{
+    if(!active)return;
+    let raf;
+    const draw=()=>{
+      const v=videoRef.current,c=canvasRef.current;if(!v||!c)return;
+      const ctx=c.getContext('2d');
+      c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+      ctx.drawImage(v,0,0);
+      // Puntos marcados
+      points.forEach((p,i)=>{
+        ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);
+        ctx.fillStyle='#f97316';ctx.fill();
+        ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+        ctx.fillStyle='#fff';ctx.font='bold 12px Rajdhani,monospace';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(i+1,p.x,p.y);
+      });
+      // Línea entre puntos
+      if(points.length>1){
+        ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);
+        points.forEach(p=>ctx.lineTo(p.x,p.y));
+        if(points.length===4)ctx.closePath();
+        ctx.strokeStyle='#f97316';ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
+      }
+      raf=requestAnimationFrame(draw);
+    };
+    raf=requestAnimationFrame(draw);
+    return()=>cancelAnimationFrame(raf);
+  },[active,points]);
+
+  const handleCanvasClick=(e)=>{
+    if(points.length>=4)return;
+    const rect=canvasRef.current.getBoundingClientRect();
+    const scaleX=canvasRef.current.width/rect.width;
+    const scaleY=canvasRef.current.height/rect.height;
+    const x=(e.clientX-rect.left)*scaleX;
+    const y=(e.clientY-rect.top)*scaleY;
+    setPoints(prev=>[...prev,{x,y}]);
+  };
+
+  const undoPoint=()=>setPoints(prev=>prev.slice(0,-1));
+
+  const saveCalibration=()=>{
+    if(points.length!==4)return;
+    const W=canvasRef.current.width,H=canvasRef.current.height;
+    // Normalizar puntos a 0-1 del frame de la cámara
+    const normalized=points.map(p=>({x:p.x/W,y:p.y/H}));
+    const calib={points:normalized,camW:W,camH:H,date:new Date().toLocaleDateString()};
+    localStorage.setItem(CALIB_KEY,JSON.stringify(calib));
+    setSavedCalib(calib);setCalibrated(true);
+    stopCamera();
+  };
+
+  const clearCalibration=()=>{
+    localStorage.removeItem(CALIB_KEY);setSavedCalib(null);setCalibrated(false);
+  };
+
+  return(
+    <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+      <div style={{color:C.accent,fontSize:12,letterSpacing:2,marginBottom:10}}>CALIBRACIÓN DE CÁMARA</div>
+      <div style={{fontSize:12,color:C.muted,lineHeight:1.5,marginBottom:10}}>
+        Sin impresora ni marcadores. Apunta la cámara al tapete y haz click en las 4 esquinas para calibrar la proyección.
+      </div>
+
+      {/* Estado de calibración guardada */}
+      {savedCalib&&!active&&(
+        <div style={{background:"rgba(34,197,94,0.08)",border:"1px solid #22c55e44",borderRadius:2,padding:8,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <div style={{fontSize:11,color:C.green,fontWeight:700,letterSpacing:1}}>✓ CALIBRADO</div>
+            <div style={{fontSize:11,color:C.muted}}>{savedCalib.date} · {savedCalib.camW}×{savedCalib.camH}px</div>
+          </div>
+          <button onClick={clearCalibration} className="rb" style={{padding:"2px 8px",fontSize:11,color:C.red,borderColor:C.red}}>BORRAR</button>
+        </div>
+      )}
+
+      {/* Visor de cámara */}
+      {active&&(
+        <div style={{marginBottom:10}}>
+          <div style={{position:"relative",borderRadius:2,overflow:"hidden",border:`1px solid ${C.border}`,cursor:points.length<4?"crosshair":"default"}}>
+            <video ref={videoRef} style={{display:"none"}} playsInline muted/>
+            <canvas ref={canvasRef} onClick={handleCanvasClick}
+              style={{display:"block",width:"100%",height:"auto"}}/>
+            {/* Instrucción actual */}
+            <div style={{position:"absolute",top:8,left:8,background:"rgba(5,13,26,0.85)",
+              padding:"4px 10px",borderRadius:2,fontSize:11,color:C.accent,fontWeight:700,letterSpacing:1}}>
+              {points.length<4?`${points.length+1}/4 — Click en la esquina ${CALIB_CORNERS[points.length]}`:"✓ 4 esquinas marcadas — Guarda la calibración"}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:6,marginTop:6}}>
+            <button onClick={undoPoint} disabled={!points.length} className="rb"
+              style={{padding:"4px 10px",fontSize:11,opacity:points.length?1:0.4}}>↩ DESHACER</button>
+            <button onClick={saveCalibration} disabled={points.length!==4} className="rb"
+              style={{padding:"4px 14px",fontSize:11,flex:1,
+                borderColor:points.length===4?C.green:C.border,
+                color:points.length===4?C.green:C.muted,
+                background:points.length===4?"rgba(34,197,94,0.08)":"transparent"}}>
+              {points.length===4?"✓ GUARDAR CALIBRACIÓN":`Marca ${4-points.length} esquina${4-points.length!==1?"s":""} más`}
+            </button>
+            <button onClick={stopCamera} className="rb" style={{padding:"4px 10px",fontSize:11,color:C.red,borderColor:C.red}}>✕</button>
+          </div>
+        </div>
+      )}
+
+      {!active&&(
+        <button onClick={startCamera}
+          style={{width:"100%",padding:"9px",background:"transparent",
+            border:`1px solid ${C.blue}`,borderRadius:2,cursor:"pointer",
+            color:C.blue,fontFamily:"'Rajdhani',monospace",fontSize:11,
+            fontWeight:700,letterSpacing:2,transition:"all .2s"}}
+          onMouseEnter={e=>e.currentTarget.style.background="rgba(56,189,248,.08)"}
+          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+          {savedCalib?"↺ RECALIBRAR CÁMARA":"⊙ INICIAR CALIBRACIÓN"}
+        </button>
+      )}
+
+      {/* Info técnica de la calibración guardada */}
+      {savedCalib&&(
+        <div style={{marginTop:8,fontSize:11,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>
+          Esquinas: {savedCalib.points.map((p,i)=>
+            `${i+1}:(${(p.x*100).toFixed(0)}%,${(p.y*100).toFixed(0)}%)`
+          ).join(' · ')}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App(){
   const [activeSystem,setActiveSystem]=useState("wh40k");
   const [activeMode,setActiveMode]=useState("combat_patrol");
@@ -2083,6 +2244,8 @@ function App(){
       {tab==="CONFIG"&&(
         <div style={{padding:14,maxWidth:560}}>
           <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:14}}>// CONFIGURACIÓN</div>
+          {/* Calibración de cámara */}
+          <CameraCalibration/>
           {/* Panel colores de auras */}
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
             <div style={{color:C.accent,fontSize:12,letterSpacing:2,marginBottom:10}}>COLORES DE AURAS</div>
