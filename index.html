@@ -1308,27 +1308,32 @@ function CameraCalibration(){
     const draw=()=>{
       const v=videoRef.current,c=canvasRef.current;
       if(!v||!c){raf=requestAnimationFrame(draw);return;}
-      if(v.readyState>=2&&v.videoWidth>0){
-        if(c.width!==v.videoWidth)c.width=v.videoWidth;
-        if(c.height!==v.videoHeight)c.height=v.videoHeight;
-        const ctx=c.getContext('2d');
-        ctx.drawImage(v,0,0);
-        const pts=pointsRef.current;
-        pts.forEach((p,i)=>{
-          ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);
-          ctx.fillStyle='#f97316';ctx.fill();
-          ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
-          ctx.fillStyle='#fff';ctx.font='bold 12px Rajdhani,monospace';
-          ctx.textAlign='center';ctx.textBaseline='middle';
-          ctx.fillText(i+1,p.x,p.y);
-        });
-        if(pts.length>1){
-          ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
-          pts.forEach(p=>ctx.lineTo(p.x,p.y));
-          if(pts.length===4)ctx.closePath();
-          ctx.strokeStyle='#f97316';ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
-        }
+      // Sincronizar tamaño del canvas con el video
+      const vw=v.videoWidth||v.clientWidth||640;
+      const vh=v.videoHeight||v.clientHeight||360;
+      if(c.width!==vw||c.height!==vh){c.width=vw;c.height=vh;}
+      const ctx=c.getContext('2d');
+      // Limpiar canvas (solo puntos, el video se ve de fondo)
+      ctx.clearRect(0,0,c.width,c.height);
+      const pts=pointsRef.current;
+      // Polígono entre puntos
+      if(pts.length>1){
+        ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+        pts.forEach(p=>ctx.lineTo(p.x,p.y));
+        if(pts.length===4)ctx.closePath();
+        ctx.strokeStyle='#f97316';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
+        ctx.fillStyle='rgba(249,115,22,0.1)';
+        if(pts.length===4)ctx.fill();
       }
+      // Puntos numerados
+      pts.forEach((p,i)=>{
+        ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);
+        ctx.fillStyle='#f97316';ctx.fill();
+        ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+        ctx.fillStyle='#fff';ctx.font='bold 11px Rajdhani,monospace';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(i+1,p.x,p.y);
+      });
       raf=requestAnimationFrame(draw);
     };
     raf=requestAnimationFrame(draw);
@@ -1383,13 +1388,20 @@ function CameraCalibration(){
       {/* Visor de cámara */}
       {active&&(
         <div style={{marginBottom:10}}>
-          <div style={{position:"relative",borderRadius:2,overflow:"hidden",border:`1px solid ${C.border}`,cursor:points.length<4?"crosshair":"default"}}>
-            <video ref={videoRef} style={{position:"absolute",width:1,height:1,opacity:0,pointerEvents:"none"}} playsInline muted autoPlay/>
+          <div style={{position:"relative",borderRadius:2,overflow:"hidden",
+            border:`1px solid ${C.border}`,cursor:points.length<4?"crosshair":"default",
+            background:"#000",minHeight:120}}>
+            {/* Video visible como fondo */}
+            <video ref={videoRef} playsInline muted autoPlay
+              style={{display:"block",width:"100%",height:"auto",maxHeight:360}}/>
+            {/* Canvas superpuesto para dibujar los puntos */}
             <canvas ref={canvasRef} onClick={handleCanvasClick}
-              style={{display:"block",width:"100%",height:"auto"}}/>
+              style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",
+                pointerEvents:"all"}}/>
             {/* Instrucción actual */}
             <div style={{position:"absolute",top:8,left:8,background:"rgba(5,13,26,0.85)",
-              padding:"4px 10px",borderRadius:2,fontSize:11,color:C.accent,fontWeight:700,letterSpacing:1}}>
+              padding:"4px 10px",borderRadius:2,fontSize:11,color:C.accent,fontWeight:700,
+              letterSpacing:1,zIndex:2,pointerEvents:"none"}}>
               {points.length<4?`${points.length+1}/4 — Click en la esquina ${CALIB_CORNERS[points.length]}`:"✓ 4 esquinas marcadas — Guarda la calibración"}
             </div>
           </div>
