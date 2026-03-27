@@ -156,6 +156,27 @@ const GAME_SYSTEMS = {
 //          corregir geometría, colores de zona J1/J2, posición de objetivos
 //          y exclusiones. Las imágenes están disponibles en el historial del chat.
 //
+// TODO-12: ✅ COMPLETADO — Etiquetas de auras clampadas dentro del tablero
+//          Los textos de distancia (ej: "AD 24\"") se dibujan fuera del borde
+//          del tablero cuando la mini está cerca del borde.
+//          Fix: recortar la posición del texto para que siempre quede dentro
+//          del área visible del tablero (clamp entre 0+padding y LW-padding).
+//
+// TODO-13: Desajuste de imágenes de overlay con el nuevo sistema de coordenadas
+//          Con el nuevo baseScale+baseOffset, las imágenes de proyección
+//          (logos, símbolos de facción) no coinciden con las auras de movimiento.
+//          El cálculo del centroide y el clip circular usan las coordenadas del
+//          espacio lógico del tablero (0-1 → LW×LH) pero el canvas ahora tiene
+//          baseOffset y baseScale aplicados via ctx.translate/scale antes de dibujar.
+//          Fix: verificar que los overlays se dibujan dentro del mismo ctx.save/restore
+//          que tiene el transform de baseScale aplicado.
+//
+// TODO-14: ✅ COMPLETADO — Índice y botones de auras con colores dinámicos de auraColors
+//          El panel de ÍNDICE (modal) debe reflejar los colores configurados
+//          en CONFIG → COLORES DE AURAS, no los colores hardcodeados.
+//          Los botones de la barra (M, C, AD, HAB, ER) también deben usar
+//          el color configurado en auraColors en lugar del color fijo del array.
+//
 // TODO-2: ✅ COMPLETADO — Fit-to-screen por defecto
 //         Al cargar o al hacer RESET, calcular el zoom inicial para que el
 //         tablero completo quepa en el canvas visible del dispositivo.
@@ -724,7 +745,11 @@ function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMi
       ctx.font='bold 9px \'Rajdhani\',monospace';
       ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';
       const first=circles[0];
-      ctx.fillText(label,first.cx+first.rad*0.7+3,first.cy-first.rad*0.7);
+      // TODO-12 FIX: clampear la posición del texto dentro del tablero
+      const PAD=4;
+      const tx=Math.min(first.cx+first.rad*0.7+3, W-50);
+      const ty=Math.max(PAD+4, Math.min(first.cy-first.rad*0.7, H-PAD));
+      ctx.fillText(label,tx,ty);
     }
     ctx.restore();
   });
@@ -1171,6 +1196,7 @@ function App(){
     charge:"#a855f7",
     shoot:"#38bdf8",
     abilities:"#fbbf24",
+    engage:"#f43f5e",
   });
   const [apiKey,setApiKey]=useState("");
   const [showApiKey,setShowApiKey]=useState(false);
@@ -1556,7 +1582,8 @@ function App(){
         <div style={{padding:14,display:"flex",gap:14,height:"calc(100vh - 110px)",overflow:"hidden"}}>
           <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",overflow:"hidden"}}>
             <div style={{marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-              {[{key:"move",label:"M",color:C.green},{key:"charge",label:"C",color:C.purple},{key:"shoot",label:"AD",color:C.blue},{key:"abilities",label:"HAB",color:C.yellow},{key:"engage",label:"ER",color:C.red}].map(({key,label,color})=>{
+              {[{key:"move",label:"M"},{key:"charge",label:"C"},{key:"shoot",label:"AD"},{key:"abilities",label:"HAB"},{key:"engage",label:"ER",defaultColor:C.red}].map(({key,label,defaultColor})=>{
+                const color=key==="engage"?(auraColors.engage||defaultColor):auraColors[key]||C.green;
                 const [r,g,b]=h2p(color);
                 return(<button key={key} onClick={()=>setActiveAuras(prev=>({...prev,[key]:!prev[key]}))}
                   style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:2,cursor:"pointer",border:`1px solid ${activeAuras[key]?color:C.border}`,background:activeAuras[key]?`rgba(${r},${g},${b},.1)`:"transparent",color:activeAuras[key]?color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
@@ -1862,7 +1889,7 @@ function App(){
                 <span style={{flex:1,fontSize:13,color:auraColors[key],fontWeight:700,letterSpacing:1}}>{label}</span>
                 <span style={{fontSize:11,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>{auraColors[key]}</span>
                 <button onClick={()=>{
-                  const defaults={move:"#22c55e",charge:"#a855f7",shoot:"#38bdf8",abilities:"#fbbf24"};
+                  const defaults={move:"#22c55e",charge:"#a855f7",shoot:"#38bdf8",abilities:"#fbbf24",engage:"#f43f5e"};
                   setAuraColors(prev=>({...prev,[key]:defaults[key]}));
                 }} className="rb" style={{padding:"2px 7px",fontSize:12}}>↺</button>
               </div>
@@ -1924,12 +1951,24 @@ function App(){
               <span style={{color:C.blue,fontWeight:700,letterSpacing:2,fontSize:13}}>// ÍNDICE DE AURAS</span>
               <button onClick={()=>setShowLegend(false)} className="rb" style={{padding:"2px 8px",fontSize:12}}>✕</button>
             </div>
-            {[{label:"M — MOVIMIENTO",color:C.green,desc:"Radio de movimiento en pulgadas."},{label:"C — CARGA",color:C.purple,desc:"Alcance de carga estimado (M + 7\" media de 2D6)."},{label:"AD — ARMA DIST.",color:C.blue,desc:"Alcance del arma de mayor rango."},{label:"HAB — HABILIDADES",color:C.yellow,desc:"Auras de habilidades (Sinapsis, Fortune, Omni-scramblers…)"}].map(({label,color,desc})=>(
-              <div key={label} style={{marginBottom:8,padding:10,background:C.bg,borderRadius:2,borderLeft:`3px solid ${color}`}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><div style={{width:7,height:7,borderRadius:"50%",background:color}}/><span style={{fontWeight:700,fontSize:12,color,letterSpacing:1}}>{label}</span></div>
+            {[
+              {key:"move",    label:"M — MOVIMIENTO",   desc:'Radio de movimiento en pulgadas.'},
+              {key:"charge",  label:"C — CARGA",         desc:'Alcance de carga estimado (M + 7" media de 2D6).'},
+              {key:"shoot",   label:"AD — ARMA DIST.",   desc:'Alcance del arma de mayor rango.'},
+              {key:"abilities",label:"HAB — HABILIDADES",desc:'Auras de habilidades (Sinapsis, Fortune, Omni-scramblers…)'},
+              {key:"engage",  label:"ER — ENGAGEMENT",   desc:'Zona de combate cuerpo a cuerpo (1" desde el borde de la peana).'},
+            ].map(({key,label,desc})=>{
+              const color=auraColors[key]||C.green;
+              return(
+              <div key={key} style={{marginBottom:8,padding:10,background:C.bg,borderRadius:2,borderLeft:`3px solid ${color}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:color}}/>
+                  <span style={{fontWeight:700,fontSize:12,color,letterSpacing:1}}>{label}</span>
+                </div>
                 <p style={{fontSize:12,color:C.muted,lineHeight:1.4}}>{desc}</p>
               </div>
-            ))}
+              );
+            })}
             <div style={{fontSize:12,color:C.muted,textAlign:"center",marginTop:6}}>CLIC FUERA PARA CERRAR</div>
           </div>
         </div>
