@@ -1,1 +1,2551 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Wargame Vision System</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --fs-xs:11px; --fs-sm:12px; --fs-md:13px; --fs-lg:14px; --fs-xl:16px;
+  --lh:1.5;
+}
+body{background:#050d1a;color:#c8dff5;font-family:'Rajdhani',monospace;overflow-x:hidden;font-size:var(--fs-lg);}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#050d1a;}::-webkit-scrollbar-thumb{background:#0e2a4a;}
+.rb{border:1px solid #0e2a4a;background:transparent;color:#3a5a7a;cursor:pointer;font-family:'Rajdhani',monospace;font-weight:600;letter-spacing:1px;transition:all .2s;font-size:var(--fs-md);}
+.rb:hover{border-color:#f97316;color:#f97316;}
+.rb.on{border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.18);}
+.rb.bon{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,0.12);}
+.rb.gon{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,0.12);}
+.rb.ron{border-color:#f43f5e;color:#f43f5e;background:rgba(244,63,94,0.12);}
+.panel{background:#070f20;border:1px solid #0e2a4a;position:relative;overflow:hidden;}
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#f97316,transparent);opacity:.4;}
+.tag{font-size:var(--fs-sm);font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:2px;}
+/* Escalar todos los textos inline que se quedan pequeños */
+span,div,p,label{font-size:inherit;}
+.pulse{animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.spin{animation:spin 1s linear infinite;}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.fade-in{animation:fadeIn .25s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.unit-row{border:1px solid #0e2a4a;border-radius:2px;padding:9px 12px;margin-bottom:5px;transition:all .2s;background:#050d1a;cursor:pointer;font-size:var(--fs-md);}
+.unit-row:hover{border-color:#1e3a5a;}
+.unit-row.deployed{border-color:#22c55e44;background:rgba(34,197,94,0.04);}
+.unit-row.eliminated{border-color:#f43f5e22;background:rgba(244,63,94,0.04);opacity:0.5;}
+.unit-row.selected-unit{border-color:#f97316;background:rgba(249,115,22,0.06);}
+.aura-badge{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:2px;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;margin:2px;}
+.drop-zone{border:2px dashed #0e2a4a;border-radius:4px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;font-size:var(--fs-md);}
+.drop-zone:hover,.drop-zone.drag-over{border-color:#38bdf8;background:rgba(56,189,248,0.05);}
+input[type=file]{display:none;}
+/* Forzar herencia en todos los contenedores React */
+#root *{font-family:'Rajdhani',monospace;}
+/* Escala mínima — nada por debajo de 11px */
+#root [style*="fontSize: 8"],#root [style*="fontSize: 9"],#root [style*="fontSize: 10"]{font-size:var(--fs-xs) !important;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback, useMemo } = React;
+
+const C = {bg:"#050d1a",panel:"#070f20",border:"#0e2a4a",accent:"#f97316",blue:"#38bdf8",text:"#c8dff5",muted:"#3a5a7a",green:"#22c55e",purple:"#a855f7",red:"#f43f5e",yellow:"#fbbf24"};
+const PLAYER_COLORS = ["#f97316","#38bdf8","#22c55e","#a855f7","#f43f5e","#fbbf24"];
+const FACTION_COLORS = {"Adeptus Astartes":"#38bdf8","Aeldari":"#22c55e","Tiránidos":"#a855f7","Orks":"#84cc16","Necrons":"#06b6d4","Chaos":"#a855f7","T'au":"#f59e0b","Drukhari":"#f43f5e"};
+const h2p = h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const h2rgb = h=>h2p(h).join(',');
+
+const GAME_SYSTEMS = {
+  wh40k:{label:"Warhammer 40,000",short:"WH40K",color:"#38bdf8",
+    modes:{
+      combat_patrol:{label:"Combat Patrol",w:44,h:30,maxRounds:5},
+      incursion:{label:"Incursion (1000pts)",w:44,h:60,maxRounds:5},
+      strike_force:{label:"Strike Force (2000pts)",w:44,h:60,maxRounds:5},
+      onslaught:{label:"Onslaught (3000pts)",w:44,h:90,maxRounds:5},
+    }},
+  kill_team:{label:"Kill Team",short:"KT",color:"#f97316",
+    modes:{
+      standard:{label:"Estándar",w:22,h:30,maxRounds:4},
+      gallowdark:{label:"Gallowdark",w:24,h:28,maxRounds:4},
+    }},
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REGLAS WARHAMMER 40,000 — REFERENCIA PARA LA APP
+// Extraídas del libro de reglas físico. Usadas para cálculos de auras,
+// distancias, coherencia, carga y combate.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── DISTANCIAS CLAVE ──────────────────────────────────────────────────────────
+// Engagement Range:          1" horizontal, 5" vertical
+//                            → Dos unidades están en combate si están dentro de 1"
+// Coherencia de unidad:      2" horizontal, 5" vertical de AL MENOS 1 modelo (unidades 2-6)
+//                            2" horizontal, 5" vertical de AL MENOS 2 modelos (unidades 7+)
+// Rango de carga:            2D6" (media 7"). La unidad debe poder acabar a 1" del objetivo.
+// Pile In:                   hasta 3" hacia el modelo enemigo más cercano
+// Consolidate:               hasta 3" hacia el modelo enemigo más cercano
+//                            (o hacia el objetivo más cercano si no hay enemigos)
+// Terrain ≤ 2":              los modelos pueden moverse sobre él libremente
+// Terrain > 2":              los modelos pueden escalar pero cuentan la distancia vertical
+
+// ── FASES DE TURNO ────────────────────────────────────────────────────────────
+// 1. MOVIMIENTO
+//    - Normal Move: hasta M" (no puede terminar en Engagement Range de enemigos)
+//    - Advance:     M + D6" (no puede disparar ni cargar ese turno)
+//    - Fall Back:   hasta M" (puede atravesar enemigos con Desperate Escape tests,
+//                             1D6 por modelo que cruce: en 1-2, ese modelo es destruido)
+//    - Remain Stationary: no mueve. Puede Avanzar/Fall Back en fases siguientes.
+//
+// 2. CARGA (Charge Phase)
+//    - Elegible: unidad a ≤12" de unidades enemigas (no necesita línea de visión)
+//    - Roll: 2D6. Debe ser suficiente para acabar a 1" (Engagement Range) del objetivo
+//    - Charge Bonus: al final del turno, unidad tiene "Fights First" hasta fin de turno
+//    - FLY: mide "por el aire" (distancia diagonal si sube/baja terreno)
+//    - Terreno >2": cuenta distancia vertical de subida y bajada
+//
+// 3. COMBATE (Fight Phase)
+//    - Paso 1 — FIGHTS FIRST: unidades con esa habilidad + unidades que cargaron
+//    - Paso 2 — REMAINING COMBATS: resto de unidades elegibles
+//    - Elegible para combatir: dentro de Engagement Range de enemigos,
+//                              O hizo una carga este turno
+//    - Pile In: cada modelo mueve ≤3" hacia el modelo enemigo más cercano
+//      (debe acabar más cerca del enemigo más cercano y en coherencia de unidad)
+//    - Select Targets: modelos dentro de Engagement Range del enemigo,
+//      O en contacto base a base con un modelo de su propia unidad que SÍ esté en ER
+//    - Consolidate: ≤3" hacia el modelo enemigo más cercano
+//      (si no hay enemigos, hacia el objetivo más cercano)
+
+// ── COHERENCIA DE UNIDAD ─────────────────────────────────────────────────────
+// Unidades 2-6 modelos: cada modelo a ≤2" horizontal y ≤5" vertical de ≥1 modelo
+// Unidades 7+ modelos:  cada modelo a ≤2" horizontal y ≤5" vertical de ≥2 modelos
+// Si no puede mantener coherencia al final de un movimiento → no puede hacer ese movimiento
+// Al final del turno: si no está en coherencia, eliminar modelos hasta que lo esté
+// Modelos eliminados así cuentan como destruidos pero NO activan reglas de "al ser destruido"
+
+// ── IMPLICACIONES PARA LA APP ─────────────────────────────────────────────────
+// Aura de Engagement Range:  1" desde el borde de la peana → zona de combate
+// Aura de Carga:             M + 7" (media 2D6) desde borde de peana
+// Coherencia visual:         2" entre modelos del mismo jugador (futuro: alertar si >2")
+// Pile In / Consolidate:     3" adicionales al movimiento en fase de combate
+// Advance range:             M + D6" → mostrar como M + 3.5" promedio (o M+1 a M+6)
+
+// ── CONVENCIONES DE MEDIDA ───────────────────────────────────────────────────
+// Todas las distancias se miden de borde de peana a borde de peana
+// 1" = 25.4mm = 1 pulgada
+// Los vuelos (FLY) miden distancia en línea recta por el aire
+// Para el canvas: inchPx = canvasWidth / boardWidth_in_inches
+
+// ─── TAREAS PENDIENTES ───────────────────────────────────────────────────────
+//
+// TODO-1: Zonas de despliegue (drawDeploymentZone)
+//         Las zonas tienen fallos de geometría y posicionamiento de objetivos.
+//         Contrastar cada zona con las cartas físicas:
+//         - Hammer and Anvil: franja 12" horizontal (revisar)
+//         - Search and Destroy: revisar triángulos diagonales
+//         - Crucible of Battle: revisar diagonal esquina a esquina
+//         - Dawn of War: revisar franjas verticales 12"
+//         - Sweeping Engagement: revisar diagonal asimétrica
+//
+// TODO-11: Actualizar zonas de despliegue en el index con las cartas físicas
+//          Iván tiene las cartas físicas de despliegue escaneadas (6 imágenes).
+//          Hay que revisar cada zona una a una contrastando con las fotos y
+//          corregir geometría, colores de zona J1/J2, posición de objetivos
+//          y exclusiones. Las imágenes están disponibles en el historial del chat.
+//
+// TODO-12: ✅ COMPLETADO — Etiquetas de auras clampadas dentro del tablero
+//          Los textos de distancia (ej: "AD 24\"") se dibujan fuera del borde
+//          del tablero cuando la mini está cerca del borde.
+//          Fix: recortar la posición del texto para que siempre quede dentro
+//          del área visible del tablero (clamp entre 0+padding y LW-padding).
+//
+// TODO-13: ✅ COMPLETADO — Desajuste de imágenes de overlay con el nuevo sistema de coordenadas
+//          Con el nuevo baseScale+baseOffset, las imágenes de proyección
+//          (logos, símbolos de facción) no coinciden con las auras de movimiento.
+//          El cálculo del centroide y el clip circular usan las coordenadas del
+//          espacio lógico del tablero (0-1 → LW×LH) pero el canvas ahora tiene
+//          baseOffset y baseScale aplicados via ctx.translate/scale antes de dibujar.
+//          Fix: verificar que los overlays se dibujan dentro del mismo ctx.save/restore
+//          que tiene el transform de baseScale aplicado.
+//
+// TODO-14: ✅ COMPLETADO — Índice y botones de auras con colores dinámicos de auraColors
+//          El panel de ÍNDICE (modal) debe reflejar los colores configurados
+//          en CONFIG → COLORES DE AURAS, no los colores hardcodeados.
+//          Los botones de la barra (M, C, AD, HAB, ER) también deben usar
+//          el color configurado en auraColors en lugar del color fijo del array.
+//
+// TODO-2: ✅ COMPLETADO — Fit-to-screen por defecto
+//         Al cargar o al hacer RESET, calcular el zoom inicial para que el
+//         tablero completo quepa en el canvas visible del dispositivo.
+//         Fórmula: zoom = min(canvasW/boardW, canvasH/boardH) * 0.95
+//
+// TODO-3: ✅ COMPLETADO — Diferenciar auras por jugador (tinte color jugador + grupos separados)
+//         Cuando las auras de J1 y J2 se tocan, actualmente no se distinguen.
+//         Opciones a explorar:
+//         a) Separar grupos por playerId además de por tipo/radio
+//         b) Usar línea de diferente patrón de dash por jugador
+//         c) Colorear el área de intersección con un color de conflicto
+//
+// TODO-4: ✅ COMPLETADO — Persistencia de imágenes de proyección en localStorage
+//         Las imágenes subidas en CONFIG > Proyección se pierden al recargar.
+//         Guardar en localStorage (base64) para recuperarlas entre sesiones.
+//         Añadir botón "eliminar imagen guardada" en la lista.
+//
+// TODO-5: ✅ COMPLETADO — Selector rectangular de múltiples minis con movimiento de grupo
+//         Drag sin mini seleccionada = rectángulo de selección.
+//         Las minis dentro del rectángulo quedan seleccionadas (selMinis[]).
+//         Mover el grupo arrastrando cualquier mini del grupo seleccionado.
+//         Escape o click fuera = deseleccionar.
+//
+// TODO-10: ✅ COMPLETADO — Despliegue de unidad completa con botón ▶▶
+//          Añadir botón "▶▶ DESPLEGAR TODOS" junto al nombre de la unidad
+//          en la pestaña JUEGO. Al pulsarlo, despliega todas las figuras
+//          pendientes de esa unidad de una vez, colocándolas en formación
+//          ordenada (grid o línea) dentro de la zona de despliegue del jugador.
+//          Para unidades grandes (20 Termagantes) colocarlas en una cuadrícula
+//          2" de separación entre figuras respetando la coherencia de unidad.
+//
+// TODO-15: ✅ COMPLETADO — Aura de carga con 11 círculos por probabilidad 2D6
+//          El aura de carga actual muestra M+7" (media estadística de 2D6).
+//          Solución: mostrar 11 círculos concéntricos, uno por cada resultado
+//          posible de 2D6 (del 2 al 12), con opacidad proporcional a la
+//          probabilidad de ese resultado:
+//            2:  1/36 → casi invisible
+//            3:  2/36
+//            4:  3/36
+//            5:  4/36
+//            6:  5/36
+//            7:  6/36 → más opaco (resultado más probable)
+//            8:  5/36
+//            9:  4/36
+//            10: 3/36
+//            11: 2/36
+//            12: 1/36 → casi invisible
+//          El círculo de M+7" sigue siendo el principal (más grueso).
+//          Los demás son más finos y semitransparentes.
+//          El usuario puede desactivar este modo y volver al círculo único.
+//
+// TODO-6: ✅ COMPLETADO — Líneas internas en modo contorno (dash solo sobre borde exterior)
+//         En modo "border" (sin relleno) aún se ven las líneas discontinuas
+//         interiores donde los círculos se superponen.
+//         Fix: en modo border, dibujar el dash SOLO sobre el borde exterior
+//         fusionado (usar clip con la forma del borde, no círculos individuales)
+//
+// TODO-7: ✅ COMPLETADO — Aura de Engagement Range (1")
+//         Añadir un nuevo tipo de aura: zona de combate cuerpo a cuerpo.
+//         Radio = 1" desde el borde de la peana (borde a borde entre modelos).
+//         Color sugerido: rojo (#f43f5e), círculo sólido fino.
+//         Solo visible cuando la aura de combate está activada.
+//         Referencia reglas: un modelo puede luchar si está dentro de 1" horizontal
+//         y 5" vertical de un modelo enemigo.
+//
+// TODO-8: ✅ COMPLETADO — Alerta visual de coherencia de unidad
+//         Si dos figuras de la misma unidad se separan más de 2" entre sí,
+//         mostrar una línea de alerta (roja/naranja) entre ellas o un indicador
+//         en la peana. Reglas: unidades 2-6 → 1 vecino a ≤2"; unidades 7+ → 2 vecinos.
+//         El sistema debe calcular el grafo de distancias entre figuras del mismo
+//         tipo/unidad y detectar qué figuras rompen la coherencia.
+//
+// TODO-9: ✅ COMPLETADO — Calibración de cámara con 4 clicks en esquinas del tapete
+//
+// TODO-17: Responsive y uso sin proyector
+//          La app debe funcionar bien en cualquier pantalla:
+//          · Tele conectada al PC (lo más común)
+//          · Tablet en la mesa de juego
+//          · Móvil como controlador secundario
+//          · Proyector (caso avanzado)
+//
+//          Mejoras necesarias:
+//          - Layout responsive: la barra de botones y el sidebar deben
+//            adaptarse a pantallas pequeñas (tablet/móvil)
+//          - Botón FULLSCREEN en la barra del TABLERO: oculta toda la UI
+//            (botones, sidebar, pestañas) y deja solo el canvas a pantalla
+//            completa — ideal para tele o proyector
+//          - Touch events: pinch-to-zoom y drag táctil para mover minis
+//            en tablet/móvil
+//          - Modo "controlador": pantalla dividida o segunda URL donde
+//            el jugador ve la UI de control mientras otra pantalla muestra
+//            el canvas limpio
+//
+//          CONCEPTO CLAVE:
+//          La pantalla de la app web ES lo que el proyector muestra sobre el tapete.
+//          El tablero digital muestra lo que la cámara capta, con las auras encima.
+//
+//          FLUJO COMPLETO:
+//          ┌─────────────────────────────────────────────────────────┐
+//          │  Cámara cenital → captura el tapete físico              │
+//          │      ↓                                                   │
+//          │  Calibración (4 clicks) ← YA HECHO                     │
+//          │      ↓ calcula homografía H                             │
+//          │  Pestaña TABLERO                                        │
+//          │    · Fondo = feed de cámara transformado con H          │
+//          │    · Encima = auras, minis, coherencia                  │
+//          │    · El jugador ve el tapete real + overlay digital     │
+//          │      ↓                                                   │
+//          │  Botón ⛶ FULLSCREEN → canvas sin UI                   │
+//          │      ↓                                                   │
+//          │  Proyector/tele/tablet → imagen final sobre el tapete  │
+//          └─────────────────────────────────────────────────────────┘
+//
+//          PASO 1 — Calcular homografía H (DLT, JS puro):
+//          4 puntos calibración (coords cámara) → 4 esquinas del canvas (0,0)(W,0)(W,H)(0,H)
+//          H transforma coords del frame de cámara → coords del tablero digital.
+//          La transformación inversa H⁻¹ hace lo contrario.
+//
+//          PASO 2 — Feed de cámara en el TABLERO:
+//          Botón "⊙ CÁMARA" en la barra del tablero.
+//          Al activarlo, el canvas dibuja el frame de la cámara transformado con H
+//          como fondo antes de las auras y minis.
+//          El usuario ve el tapete físico real con las auras digitales superpuestas.
+//          Toggle para ajustar la opacidad del feed de cámara (0-100%).
+//
+//          PASO 3 — Corrección de perspectiva para proyector (fullscreen):
+//          Cuando se usa proyector (no tele), aplicar H⁻¹ al canvas antes de dibujar
+//          para corregir la distorsión de perspectiva del ángulo de proyección.
+//          Para tele/tablet conectada directamente no hace falta corrección.
+//
+//          PASO 4 — Detección de minis con cámara (futuro, YOLOv8):
+//          YOLOv8 detecta mini en pixel (px,py) de cámara →
+//          aplicar H → posición normalizada en tablero digital →
+//          mini se mueve automáticamente en la app.
+//         PROBLEMA: Los marcadores ArUco requieren impresora. La mayoría de usuarios
+//         no tiene impresora o no quiere pegar papeles en su tapete.
+//
+//         SOLUCIÓN PRINCIPAL — Calibración manual con 4 clicks:
+//         1. El usuario activa el modo calibración en la app
+//         2. La app muestra la imagen de la cámara en pantalla
+//         3. Aparece un overlay con instrucciones: "Haz click en la esquina
+//            Superior-Izquierda del tablero"
+//         4. El usuario hace click en las 4 esquinas del tablero físico
+//            que ve en la imagen de la cámara (en orden: TL → TR → BR → BL)
+//         5. La app calcula la homografía con esos 4 puntos
+//         6. La calibración queda guardada en localStorage
+//         7. Si la cámara se mueve: botón "Recalibrar" repite el proceso en ~10s
+//
+//         SOLUCIÓN SECUNDARIA — Detección automática del borde del tapete:
+//         Usando OpenCV en Python (script de calibración):
+//         - Detectar el rectángulo más grande en la imagen por contraste de color
+//         - Funciona cuando el tapete contrasta bien con la mesa
+//         - Si falla, caer back a la calibración manual
+//
+//         IMPLEMENTACIÓN:
+//         - En la app web: modal de calibración con canvas sobre el feed de cámara,
+//           4 puntos clickeables, cálculo de homografía en JS (perspectiveTransform)
+//         - En el script Python: recibe los 4 puntos desde la app via WebSocket
+//           o los calcula por detección automática de contornos
+//         - La homografía permite convertir coordenadas píxel → pulgadas reales
+//           para posicionar las minis en el tablero digital
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DEPLOY_ZONES = {
+  hammer_and_anvil:    {label:"Hammer and Anvil",    desc:'12" borde largo · 5 objetivos'},
+  search_and_destroy:  {label:"Search and Destroy",  desc:'Diagonal · exclusión 9" centro'},
+  crucible_of_battle:  {label:"Crucible of Battle",  desc:'Diagonal esquina a esquina'},
+  dawn_of_war:         {label:"Dawn of War",          desc:'12" borde corto · exclusión 4"'},
+  sweeping_engagement: {label:"Sweeping Engagement",  desc:'Diagonal asimétrica · 4 objetivos'},
+  spearhead_assault:   {label:"Spearhead Assault",    desc:'Triángulos borde corto'},
+};
+
+const EMBEDDED_PATROLS = [
+  {id:"space_marines_octavius",system:"wh40k",game_mode:"combat_patrol",faction:"Space Marines",faction_keyword:"Adeptus Astartes",patrol_name:"Fuerza de Choque Octavius",
+   faction_ability:{name:"Juramento y Órdenes",description:"Al inicio de tu fase de mando, elige una unidad enemiga. Puedes repetir tiradas para impactar contra ese blanco."},
+   enhancements:{default:{name:"Campeón Duelista",description:"Las armas de combate del Capitán tienen [PRECISIÓN] e [IMPACTOS LETALES]."},optional:{name:"Determinación Jurada",description:"+1 OC a miniaturas en la unidad del Capitán."}},
+   secondary_objectives:{default:{name:"Ira del Emperador",description:"2PV al final de cada fase si el Capitán eliminó miniaturas."},optional:{name:"Tácticas de Choque",description:"5PV si controlas objetivos que el oponente controlaba al inicio del turno."}},
+   stratagems:[{name:"Resistencia Genética",cost_cp:1,when:"Fase disparo/combate rival",effect:"Resta 1 a herir si F > R de tu unidad."},{name:"Instintos de Veterano",cost_cp:1,when:"Fase combate",effect:"Repite tiradas para herir de 1; si el blanco es Monstruo/Vehículo repite la tirada."},{name:"Fuerza Abrumadora",cost_cp:1,when:"Final fase de mando",effect:"Un marcador de objetivo en alcance queda asegurado."}],
+   units:[
+    {id:"capitan_octavius",name:"Capitán Octavius",role:"warlord",count:1,keywords:["Infantería","Personaje","Imperium","Exterminador","Capitán"],stats:{M:'5"',T:5,SV:"2+",W:6,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:40,base_type:"round",
+     ranged_weapons:[{name:"Bólter tormenta",keywords:["FUEGO RÁPIDO 2"],range_inches:24,attacks:2,skill:"2+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Arma reliquia",keywords:[],range_inches:0,attacks:6,skill:"2+",strength:5,AP:-2,damage:2}],
+     abilities:[{name:"Líder",type:"core",description:"Se anexa a: Escuadra de Exterminadores."},{name:"Despliegue rápido",type:"core"},{name:"Juramento y Órdenes",type:"faction"},{name:"Valor imparable",type:"special",description:"Repite tiradas de carga de la unidad.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"Repite carga",color:"#a855f7"}}]},
+    {id:"bibliotecario_tantus",name:"Bibliotecario Tantus",role:"support",count:1,keywords:["Infantería","Personaje","Psíquico","Imperium","Exterminador"],stats:{M:'5"',T:5,SV:"2+",W:5,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:40,base_type:"round",
+     ranged_weapons:[{name:"Castigo – fuego brujo",keywords:["PSÍQUICA"],range_inches:24,attacks:"1D6",skill:"3+",strength:5,AP:-1,damage:"1D3"},{name:"Castigo – concentrado",keywords:["HERIDAS DEVASTADORAS","PSÍQUICA"],range_inches:24,attacks:"1D6",skill:"3+",strength:6,AP:-2,damage:"1D3"},{name:"Bólter tormenta",keywords:["FUEGO RÁPIDO 2"],range_inches:24,attacks:2,skill:"3+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Arma de psicofuerza",keywords:["PSÍQUICA"],range_inches:0,attacks:4,skill:"3+",strength:6,AP:-1,damage:"1D3"}],
+     abilities:[{name:"Líder",type:"core",description:"Se anexa a: Escuadra de Exterminadores."},{name:"Despliegue rápido",type:"core"},{name:"Juramento y Órdenes",type:"faction"},{name:"Velo temporal",type:"special",description:"Mientras lidera una unidad, esa unidad tiene [GOLPES SOSTENIDOS 1].",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"Golpes Sostenidos 1",color:"#38bdf8"}}]},
+    {id:"escuadra_exterminadores",name:"Escuadra de Exterminadores",role:"battleline",count:5,keywords:["Infantería","Imperium","Exterminador"],stats:{M:'5"',T:5,SV:"2+",W:3,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:40,base_type:"round",
+     ranged_weapons:[{name:"Cañón de asalto",keywords:["HERIDAS DEVASTADORAS"],range_inches:24,attacks:6,skill:"3+",strength:6,AP:0,damage:1},{name:"Bólter tormenta",keywords:["FUEGO RÁPIDO 2"],range_inches:24,attacks:2,skill:"3+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Puño de energía",keywords:[],range_inches:0,attacks:3,skill:"3+",strength:8,AP:-2,damage:2},{name:"Arma de energía",keywords:[],range_inches:0,attacks:4,skill:"3+",strength:5,AP:-2,damage:1}],
+     abilities:[{name:"Despliegue rápido",type:"core"},{name:"Juramento y Órdenes",type:"faction"},{name:"Furia de la Primera",type:"special",description:"+1 a impactar contra el blanco de Juramento y Órdenes.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"+1 impactar vs Juramento",color:"#fbbf24"}}]},
+    {id:"escuadra_infernus",name:"Escuadra Infernus",role:"troops",count:5,keywords:["Infantería","Imperium","Tacticus"],stats:{M:'6"',T:4,SV:"3+",W:2,LD:"6+",OC:1},base_size_mm:32,base_type:"round",
+     ranged_weapons:[{name:"Pistola bólter",keywords:["PISTOLA"],range_inches:12,attacks:1,skill:"3+",strength:4,AP:0,damage:1},{name:"Pirobláster",keywords:["IGNORA COBERTURA","RÁFAGA"],range_inches:12,attacks:"1D6",skill:"N/A",strength:5,AP:0,damage:1}],
+     melee_weapons:[{name:"Arma de combate",keywords:[],range_inches:0,attacks:3,skill:"3+",strength:4,AP:0,damage:1}],
+     abilities:[{name:"Juramento y Órdenes",type:"faction"}]}
+   ]},
+  {id:"aeldari_fatebreakers",system:"wh40k",game_mode:"combat_patrol",faction:"Aeldari",faction_keyword:"Aeldari",patrol_name:"The Fatebreakers",
+   faction_ability:{name:"Strands of Fate",description:"Al inicio de la batalla tira 12D6 (puedes repetir todos gastando 1 dado). Los dados resultantes son tus Fate Dice."},
+   enhancements:{default:{name:"Foresight",description:"1/turno: usa Fire Overwatch con la unidad del Farseer por 0CP."},optional:{name:"Eldritch Might",description:"En cada ataque psíquico repite tirada de impactar, herir y daño de 1."}},
+   secondary_objectives:{default:{name:"Ineffable Agenda",description:"3PV al final de tu turno si controlas objetivos fuera de tu zona que no tenías al inicio."},optional:{name:"A Greater Destiny",description:"10PV al final si tienes unidades en la zona de despliegue rival."}},
+   stratagems:[{name:"Whip-Fast Reactions",cost_cp:1,when:"Fase disparo/combate rival",effect:"Resta 1 a impactar contra tu unidad Aeldari."},{name:"Storm of Shots",cost_cp:1,when:"Tu fase de disparo",effect:"+1 a impactar para hasta 2 unidades Montadas o 1 Infantería."},{name:"Zephyr-Swift",cost_cp:1,when:"Final fase disparo",effect:"Hasta 2 unidades Montadas o 1 Infantería pueden moverse 6\" extra."}],
+   units:[
+    {id:"farseer_iraneth",name:"Farseer Iraneth",role:"warlord",count:1,keywords:["Personaje","Infantería","Psíquico","Farseer"],stats:{M:'7"',T:3,SV:"6+",W:4,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:32,base_type:"round",
+     ranged_weapons:[{name:"Eldritch Storm",keywords:["BLAST","PSÍQUICA"],range_inches:24,attacks:"D6",skill:"3+",strength:6,AP:-2,damage:"D3"},{name:"Shuriken pistol",keywords:["ASSAULT","PISTOLA"],range_inches:12,attacks:1,skill:"2+",strength:4,AP:-1,damage:1},{name:"Singing spear",keywords:["ASSAULT","PSÍQUICA"],range_inches:12,attacks:1,skill:"2+",strength:9,AP:0,damage:3}],
+     melee_weapons:[{name:"Singing spear",keywords:["PSÍQUICA"],range_inches:0,attacks:2,skill:"2+",strength:3,AP:0,damage:3}],
+     abilities:[{name:"Líder",type:"core",description:"Se anexa a: Guardian Defenders."},{name:"Strands of Fate",type:"faction"},{name:"Fortune",type:"special",description:"Fase de mando: tira 1D6, con 2+ elige unidad Aeldari amiga a 12\". Resta 1 a herir contra esa unidad.",aura:{type:"buff",radius_inches:12,affects:"friendly_aeldari",display_text:"-1 herir (Fortune)",color:"#22c55e"}}]},
+    {id:"guardian_defenders",name:"Guardian Defenders",role:"battleline",count:11,keywords:["Infantería","Línea de Batalla","Guardians"],stats:{M:'7"',T:3,SV:"4+",W:1,LD:"6+",OC:2},base_size_mm:28,base_type:"round",
+     ranged_weapons:[{name:"Shuriken catapult",keywords:["ASSAULT"],range_inches:18,attacks:2,skill:"3+",strength:4,AP:-1,damage:1},{name:"Starcannon (HWP)",keywords:[],range_inches:36,attacks:2,skill:"3+",strength:8,AP:-3,damage:2}],
+     melee_weapons:[{name:"Arma de combate",keywords:[],range_inches:0,attacks:1,skill:"3+",strength:3,AP:0,damage:1}],
+     abilities:[{name:"Strands of Fate",type:"faction"},{name:"Defenders of Fate",type:"special",description:"Al final de tu fase de mando, por cada objetivo controlado con esta unidad en alcance, añade 1D6 a tu reserva de Fate Dice.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"+Fate Dice",color:"#fbbf24"}},{name:"Crewed Platform",type:"special",description:"Si el último Guardian Defender es destruido, la HWP también lo es."}]},
+    {id:"windriders",name:"Windriders",role:"fast_attack",count:6,keywords:["Montado","Volar","Windriders"],stats:{M:'14"',T:4,SV:"3+",W:2,LD:"6+",OC:2},base_size_mm:32,base_type:"oval",
+     patrol_squads:"Puede dividirse en 2 unidades de 3 (cada una con 1 scatter laser).",
+     ranged_weapons:[{name:"Scatter laser",keywords:[],range_inches:36,attacks:6,skill:"3+",strength:5,AP:0,damage:1},{name:"Twin shuriken catapult",keywords:["ASSAULT","TWIN-LINKED"],range_inches:18,attacks:2,skill:"3+",strength:4,AP:-1,damage:1}],
+     melee_weapons:[{name:"Arma de combate",keywords:[],range_inches:0,attacks:3,skill:"3+",strength:3,AP:0,damage:1}],
+     abilities:[{name:"Strands of Fate",type:"faction"},{name:"Swift Demise",type:"special",description:"Al atacar al objetivo más cercano: repite impactar de 1. Si está en alcance de un objetivo del oponente, repite la tirada completa.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"Repite impactar vs objetivo rival",color:"#22c55e"}}]},
+    {id:"wraithlord_aeldari",name:"Wraithlord",role:"heavy_support",count:1,keywords:["Monstruo","Walker","Wraith Construct"],stats:{M:'8"',T:11,SV:"2+",W:10,LD:"6+",OC:3},base_size_mm:60,base_type:"round",
+     ranged_weapons:[{name:"Bright lance",keywords:[],range_inches:36,attacks:1,skill:"4+",strength:12,AP:-3,damage:"D6+2"},{name:"Shuriken catapult x2",keywords:["ASSAULT"],range_inches:18,attacks:2,skill:"4+",strength:4,AP:-1,damage:1}],
+     melee_weapons:[{name:"Ghostglaive – golpe",keywords:[],range_inches:0,attacks:4,skill:"4+",strength:10,AP:-3,damage:"D6+1"},{name:"Ghostglaive – barrido",keywords:[],range_inches:0,attacks:8,skill:"4+",strength:7,AP:-2,damage:2}],
+     abilities:[{name:"Final Violento 1",type:"core",description:"Al ser destruido, con un 6 cada unidad a 6\" sufre 1 herida mortal."}]}
+   ]},
+  {id:"raven_guard_kevarax",system:"wh40k",game_mode:"combat_patrol",faction:"Raven Guard",faction_keyword:"Adeptus Astartes",patrol_name:"Shadow Claw Kevarax",
+   faction_ability:{name:"Oath of Moment",description:"Al inicio de tu fase de mando, elige una unidad enemiga. Puedes repetir tiradas para impactar contra ese blanco."},
+   enhancements:{default:{name:"Deadly Duellist",description:"Las armas de combate del Capitán tienen [LETHAL HITS]."},optional:{name:"Area Denial",description:"Al final de tu fase de mando, si el Capitán está en alcance de un objetivo, ese objetivo permanece bajo tu control aunque no tengas miniaturas en alcance."}},
+   secondary_objectives:{default:{name:"Concentrated Wrath",description:"2PV cada vez que destruyas una unidad enemiga. 3PV si era tu Oath of Moment target."},optional:{name:"Clandestine Infiltration",description:"10PV al final si controlas el objetivo más cercano al borde rival."}},
+   stratagems:[{name:"Stranglehold",cost_cp:1,when:"Fase de mando",effect:"+1 OC a los modelos de una unidad Adeptus Astartes."},{name:"From the Shadows",cost_cp:1,when:"Fase disparo/combate",effect:"+1 PA a las armas + [ANTI-MONSTER 4+] y [ANTI-VEHICLE 4+] para una unidad que no haya actuado."},{name:"Force Their Hand",cost_cp:1,when:"Fase movimiento rival",effect:"Tu unidad a 9\" puede moverse D6\" (6\" si es Phobos) tras un movimiento enemigo."}],
+   units:[
+    {id:"captain_kevarax",name:"Captain Kevarax",role:"warlord",count:1,keywords:["Infantería","Personaje","Jump Pack","Volar","Imperium","Tacticus","Capitán"],stats:{M:'12"',T:4,SV:"3+",W:5,LD:"6+",OC:1},invulnerable_save:"4+",base_size_mm:40,base_type:"round",
+     ranged_weapons:[{name:"Heavy bolt pistol",keywords:["PISTOLA"],range_inches:18,attacks:1,skill:"2+",strength:4,AP:-1,damage:1}],
+     melee_weapons:[{name:"Relic weapon",keywords:[],range_inches:0,attacks:6,skill:"2+",strength:5,AP:-2,damage:2}],
+     abilities:[{name:"Líder",type:"core",description:"Se anexa a: Assault Intercessors with Jump Packs."},{name:"Deep Strike",type:"core"},{name:"Oath of Moment",type:"faction"},{name:"Angel's Wrath",type:"special",description:"Tras una carga, +1 Fuerza a las armas de combate de la unidad hasta el final del turno.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"+1 F combate tras carga",color:"#f97316"}}]},
+    {id:"assault_intercessors_jp",name:"Assault Intercessors JP",role:"troops",count:5,keywords:["Infantería","Jump Pack","Volar","Imperium","Tacticus"],stats:{M:'12"',T:4,SV:"3+",W:2,LD:"6+",OC:1},base_size_mm:32,base_type:"round",
+     ranged_weapons:[{name:"Heavy bolt pistol",keywords:["PISTOLA"],range_inches:12,attacks:1,skill:"3+",strength:4,AP:-1,damage:1}],
+     melee_weapons:[{name:"Astartes chainsword",keywords:[],range_inches:0,attacks:4,skill:"3+",strength:4,AP:-1,damage:1},{name:"Power weapon (Sgto)",keywords:[],range_inches:0,attacks:4,skill:"3+",strength:5,AP:-2,damage:1}],
+     abilities:[{name:"Deep Strike",type:"core"},{name:"Oath of Moment",type:"faction"},{name:"Hammer of Wrath",type:"special",description:"Tras una carga, tira 1D6 por modelo en zona de amenaza: con 4+ la unidad enemiga sufre 1 herida mortal.",aura:{type:"buff",radius_inches:0,affects:"unit",display_text:"Heridas mortales tras carga",color:"#f43f5e"}}]},
+    {id:"infiltrator_squad",name:"Infiltrator Squad",role:"troops",count:10,keywords:["Infantería","Smoke","Imperium","Phobos"],stats:{M:'6"',T:4,SV:"3+",W:2,LD:"6+",OC:1},base_size_mm:32,base_type:"round",
+     patrol_squads:"Puede dividirse en 2 unidades de 5.",
+     ranged_weapons:[{name:"Bolt pistol",keywords:["PISTOLA"],range_inches:12,attacks:1,skill:"3+",strength:4,AP:0,damage:1},{name:"Marksman bolt carbine",keywords:["HEAVY"],range_inches:24,attacks:2,skill:"3+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Arma de combate",keywords:[],range_inches:0,attacks:3,skill:"3+",strength:4,AP:0,damage:1}],
+     abilities:[{name:"Infiltrators",type:"core"},{name:"Oath of Moment",type:"faction"},{name:"Omni-scramblers",type:"special",description:"Unidades enemigas de Reservas no pueden desplegarse a 12\" o menos.",aura:{type:"denial",radius_inches:12,affects:"enemy",display_text:"Bloqueo reservas 12\"",color:"#f43f5e"}}]},
+    {id:"invictor_tactical_warsuit",name:"Invictor Tactical Warsuit",role:"heavy_support",count:1,keywords:["Vehículo","Walker","Imperium","Phobos"],stats:{M:'8"',T:8,SV:"3+",W:12,LD:"6+",OC:4},base_size_mm:60,base_type:"round",
+     damaged_profile:{threshold:"1-4 heridas",effect:"Resta 1 a impactar."},
+     ranged_weapons:[{name:"Twin ironhail autocannon",keywords:["TWIN-LINKED"],range_inches:48,attacks:3,skill:"3+",strength:9,AP:-1,damage:3},{name:"Heavy bolter",keywords:["SUSTAINED HITS 1"],range_inches:36,attacks:3,skill:"3+",strength:5,AP:-1,damage:2},{name:"Fragstorm launcher",keywords:["BLAST"],range_inches:18,attacks:"D6",skill:"3+",strength:4,AP:0,damage:1}],
+     melee_weapons:[{name:"Invictor fist",keywords:[],range_inches:0,attacks:5,skill:"3+",strength:14,AP:-2,damage:3}],
+     abilities:[{name:"Final Violento D3",type:"core"},{name:"Scouts 8\"",type:"core"},{name:"Oath of Moment",type:"faction"}]}
+   ]},
+  {id:"tyranids_vardenghast",system:"wh40k",game_mode:"combat_patrol",faction:"Tiránidos",faction_keyword:"Tiránidos",patrol_name:"Enjambre Vardenghast",
+   faction_ability:{name:"Sinapsis + Sombra en la Disformidad",description:"Sinapsis: unidades a 6\" de una miniatura Sinapsis hacen chequeos de acobardamiento con 3D6. Sombra: 1/batalla, todas las unidades enemigas hacen un chequeo de acobardamiento."},
+   enhancements:{default:{name:"Velo Psicoestático",description:"Terror: Agente solitario + salvación inv. 4+ + resta 1 a impactar en combate."},optional:{name:"Secreción Súbita",description:"1/turno: cuando una unidad Tiránidos amiga a 6\" dispare o combata, mejora en 1 el FP de sus armas."}},
+   secondary_objectives:{default:{name:"Xenomorfo Alfa",description:"4PV al final de cada fase si el Terror eliminó miniaturas."},optional:{name:"Marea Quitinosa",description:"5PV al final de tu turno si controlas objetivos a 6\" o menos de la zona rival."}},
+   stratagems:[{name:"Hiperreactivo",cost_cp:1,when:"Fase disparo/combate rival",effect:"Resta 1 a impactar contra una unidad Infantería Tiránidos."},{name:"Asalto Voraz",cost_cp:1,when:"Fase disparo/combate",effect:"Una unidad que no haya actuado: repite tiradas para impactar contra el blanco más cercano."},{name:"Y más, y muchos más...",cost_cp:1,when:"Paso de refuerzos",effect:"Devuelve 1D6 Termagantes (o crea una nueva unidad de 2D6 si fue eliminada)."}],
+   units:[
+    {id:"terror_vardenghast",name:"Terror de Vardenghast",role:"warlord",count:1,keywords:["Infantería","Personaje","Volar","Gran Devorador","Sinapsis"],stats:{M:'12"',T:5,SV:"4+",W:6,LD:"7+",OC:1},base_size_mm:40,base_type:"round",
+     melee_weapons:[{name:"Garras Primus",keywords:[],range_inches:0,attacks:6,skill:"2+",strength:6,AP:-1,damage:2}],
+     abilities:[{name:"Despliegue Rápido",type:"core"},{name:"Sombra en la Disformidad",type:"faction"},{name:"Sinapsis",type:"faction",aura:{type:"synapse",radius_inches:6,affects:"friendly_tyranids",display_text:"Sinapsis 6\"",color:"#a855f7"}},{name:"Golpe de muerte",type:"special",description:"Si es eliminado en combate antes de combatir, tira 1D6: con 4+ puede combatir antes de retirarse."}]},
+    {id:"psicofago",name:"Psicófago",role:"elite",count:1,keywords:["Monstruo","Gran Devorador","Cosechador","Sinapsis"],stats:{M:'8"',T:9,SV:"3+",W:10,LD:"8+",OC:3},base_size_mm:60,base_type:"round",
+     ranged_weapons:[{name:"Ráfaga psicoclástica",keywords:["IGNORA COBERTURA","RÁFAGA"],range_inches:12,attacks:"1D6",skill:"N/A",strength:6,AP:-1,damage:1}],
+     melee_weapons:[{name:"Espolones y mandíbula tentacular",keywords:["ANTIPSÍQUICO 4+","HERIDAS DEVASTADORAS"],range_inches:0,attacks:"1D6+1",skill:"3+",strength:6,AP:-1,damage:2}],
+     abilities:[{name:"Final Violento 1",type:"core"},{name:"No hay dolor 5+",type:"core",description:"Con 5+, ignora una herida."},{name:"Sinapsis",type:"faction",aura:{type:"synapse",radius_inches:6,affects:"friendly_tyranids",display_text:"Sinapsis 6\"",color:"#a855f7"}},{name:"Frenesí alimenticio",type:"special",description:"+1 impactar vs unidades diezmadas; +1 herir si están por debajo del 50%.",aura:{type:"buff",radius_inches:0,affects:"self",display_text:"+1 impactar vs diezmados",color:"#a855f7"}}]},
+    {id:"termagantes",name:"Termagantes",role:"battleline",count:20,keywords:["Infantería","Línea de Batalla","Gran Devorador","Multitud Interminable"],stats:{M:'6"',T:3,SV:"5+",W:1,LD:"8+",OC:2},base_size_mm:28,base_type:"round",
+     patrol_squads:"Puede dividirse en 2 unidades de 10.",
+     ranged_weapons:[{name:"Perforacarne",keywords:["ASALTO"],range_inches:18,attacks:1,skill:"4+",strength:5,AP:0,damage:1}],
+     melee_weapons:[{name:"Garras quitinosas y dientes",keywords:[],range_inches:0,attacks:1,skill:"4+",strength:3,AP:0,damage:1}],
+     abilities:[{name:"Sinapsis",type:"faction"},{name:"Horrores merodeadores",type:"special",description:"1/turno: si una unidad enemiga termina un movimiento a 9\" o menos, esta unidad puede moverse 1D6\".",aura:{type:"reaction",radius_inches:9,affects:"self",display_text:"Mov. reactivo 9\"",color:"#22c55e"}}]},
+    {id:"espinogantes",name:"Espinogantes",role:"troops",count:5,keywords:["Infantería","Gran Devorador"],stats:{M:'6"',T:4,SV:"4+",W:2,LD:"8+",OC:1},base_size_mm:28,base_type:"round",
+     ranged_weapons:[{name:"Lanzaespinas",keywords:["ÁREA","PESADA"],range_inches:24,attacks:"1D6",skill:"4+",strength:5,AP:0,damage:1}],
+     melee_weapons:[{name:"Garras quitinosas y dientes",keywords:[],range_inches:0,attacks:1,skill:"4+",strength:4,AP:0,damage:1}],
+     abilities:[{name:"Sinapsis",type:"faction"},{name:"Bombardeo trastocador",type:"special",description:"Tras disparar: si una unidad Infantería enemiga fue impactada, queda trastocada (-2M, -2 avanzar/cargar).",aura:{type:"debuff",radius_inches:0,affects:"enemy_hit",display_text:"Trastocado: -2M/-2 carga",color:"#f43f5e"}}]},
+    {id:"saltadores_von_ryan",name:"Saltadores de Von Ryan",role:"fast_attack",count:3,keywords:["Infantería","Gran Devorador","Invasor de Vanguardia"],stats:{M:'10"',T:5,SV:"4+",W:3,LD:"8+",OC:1},invulnerable_save:"6+",base_size_mm:40,base_type:"round",
+     melee_weapons:[{name:"Espolones de Saltador",keywords:[],range_inches:0,attacks:6,skill:"3+",strength:5,AP:-1,damage:1}],
+     abilities:[{name:"Combatir primero",type:"core"},{name:"Infiltradores",type:"core"},{name:"Sigilo",type:"core",description:"-1 a impactar contra esta unidad en ataques a distancia."},{name:"Sinapsis",type:"faction"},{name:"Abalanzarse de un salto",type:"special",description:"Puedes usar Intervención heroica con esta unidad por 0PM (aunque ya la hayas usado esta fase)."}]}
+   ]}
+];
+
+// ─── DIBUJO ──────────────────────────────────────────────────────────────────
+
+// Dibuja un marcador de objetivo (calavera) en posición en pulgadas
+function drawObjective(ctx,x,y,inchPx,label){
+  const r=(40/2/25.4)*inchPx; // peana exterminador 40mm
+  ctx.save();
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle="rgba(20,30,50,0.7)";ctx.fill();
+  ctx.strokeStyle="#c8dff5";ctx.lineWidth=1;ctx.stroke();
+  // Calavera simplificada
+  ctx.fillStyle="#c8dff5";ctx.font=`bold ${Math.max(8,r*1.1)}px 'Rajdhani',monospace`;
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText("☠",x,y);
+  if(label){
+    ctx.font=`bold ${Math.max(7,r*0.7)}px 'Rajdhani',monospace`;
+    ctx.fillStyle="#c8dff566";ctx.fillText(label,x,y+r+5);
+  }
+  ctx.restore();
+}
+
+function drawDeploymentZone(ctx,W,H,BW,BH,zoneKey){
+  const px=v=>v*W/BW, py=v=>v*H/BH;
+  const iP=W/BW; // inchPx
+  const P1="#f97316",P2="#38bdf8",NML="rgba(255,255,255,0.03)";
+
+  const fillZ=(path,fill,stroke,dash=true)=>{
+    ctx.save();ctx.beginPath();path();
+    ctx.fillStyle=fill+"2a";ctx.fill();
+    ctx.strokeStyle=stroke;ctx.lineWidth=1.5;
+    if(dash)ctx.setLineDash([6,4]);
+    ctx.stroke();ctx.setLineDash([]);ctx.restore();
+  };
+
+  // Etiqueta de zona
+  const zoneLabel=(x,y,c,txt)=>{
+    ctx.save();ctx.font="bold 12px 'Rajdhani',monospace";
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillStyle=c;ctx.shadowColor=c;ctx.shadowBlur=8;
+    ctx.fillText(txt,x,y);ctx.shadowBlur=0;ctx.restore();
+  };
+
+  // ── HAMMER AND ANVIL ────────────────────────────────────────────────
+  // J1: franja sup 12", J2: franja inf 12", NML 6" central
+  // Tablero 44"×30". Objetivos: centro de cada zona + 2 laterales a 16" del centro
+  if(zoneKey==="hammer_and_anvil"){
+    fillZ(()=>ctx.rect(0,0,W,py(12)),P1,P1);
+    fillZ(()=>ctx.rect(0,H-py(12),W,py(12)),P2,P2);
+    fillZ(()=>ctx.rect(0,py(12),W,py(6)),NML,"transparent",false);
+    zoneLabel(W/2,py(6),P1,"J1 — ATTACKER");
+    zoneLabel(W/2,H-py(6),P2,"J2 — DEFENDER");
+    // Objetivos: layout de la carta (5 objetivos)
+    drawObjective(ctx,W/2,py(8),iP,"1");           // centro zona J1
+    drawObjective(ctx,W/2,H-py(8),iP,"5");          // centro zona J2
+    drawObjective(ctx,W/2,H/2,iP,"3");               // centro tablero
+    drawObjective(ctx,W/2-px(16),H/2,iP,"2");        // lateral izq
+    drawObjective(ctx,W/2+px(16),H/2,iP,"4");        // lateral der
+  }
+
+  // ── SEARCH AND DESTROY ──────────────────────────────────────────────
+  // J1: cuadrante sup-izq (hasta 12" del centro en X e Y)
+  // J2: cuadrante inf-der (espejo)
+  // Exclusión circular 9" en el centro
+  else if(zoneKey==="search_and_destroy"){
+    // J1 sup-izq: desde (0,0) hasta (BW/2, BH/2), margen de 12" del centro diagonal
+    fillZ(()=>{
+      ctx.moveTo(0,0);ctx.lineTo(W,0);
+      ctx.lineTo(W,H/2-py(12));ctx.lineTo(W/2+px(12),H/2-py(12));
+      ctx.lineTo(W/2,0);ctx.closePath();
+    },P1,P1);
+    // Triángulo rojo principal
+    fillZ(()=>{
+      ctx.moveTo(0,0);ctx.lineTo(W/2-px(0),0);
+      ctx.lineTo(0,H/2);ctx.closePath();
+    },P1,P1);
+    // J2 inf-der espejo
+    fillZ(()=>{
+      ctx.moveTo(W,H);ctx.lineTo(W/2,H);
+      ctx.lineTo(W,H/2);ctx.closePath();
+    },P2,P2);
+    // Zona exclusión 9"
+    ctx.save();ctx.beginPath();ctx.arc(W/2,H/2,px(9),0,Math.PI*2);
+    ctx.fillStyle="rgba(5,13,26,0.6)";ctx.fill();
+    ctx.strokeStyle="#f43f5e";ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle="#f43f5e88";ctx.font="bold 10px 'Rajdhani',monospace";
+    ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText('9"',W/2,H/2);
+    ctx.restore();
+    zoneLabel(px(8),py(6),P1,"J1");
+    zoneLabel(W-px(8),H-py(6),P2,"J2");
+    // Objetivos (4): 2 por bando a 12" del centro lateral
+    drawObjective(ctx,px(12),py(6),iP,"1");
+    drawObjective(ctx,W/2+px(12),py(6),iP,"2");
+    drawObjective(ctx,W/2-px(12),H-py(6),iP,"3");
+    drawObjective(ctx,W-px(12),H-py(6),iP,"4");
+  }
+
+  // ── CRUCIBLE OF BATTLE ──────────────────────────────────────────────
+  // Diagonal de esquina sup-izq a inf-der. J1 triángulo sup, J2 triángulo inf
+  // Exclusión 6" desde la diagonal
+  else if(zoneKey==="crucible_of_battle"){
+    // J1: triángulo superior (sup-izq a sup-der a inf-der)
+    fillZ(()=>{
+      ctx.moveTo(0,0);ctx.lineTo(W,0);
+      ctx.lineTo(W,H-py(6));ctx.lineTo(px(6),H);
+      ctx.lineTo(0,H);ctx.closePath();
+    },P1,P1);
+    // J2: triángulo inferior (inf-der a inf-izq a sup-izq)  
+    fillZ(()=>{
+      ctx.moveTo(W,H);ctx.lineTo(0,H);
+      ctx.lineTo(0,py(6));ctx.lineTo(W-px(6),0);
+      ctx.lineTo(W,0);ctx.closePath();
+    },P2,P2);
+    zoneLabel(px(8),py(5),P1,"J1");
+    zoneLabel(W-px(8),H-py(5),P2,"J2");
+    // Objetivos: según carta (centro + laterales)
+    drawObjective(ctx,px(8),py(8),iP,"1");
+    drawObjective(ctx,W/2,py(10),iP,"2");
+    drawObjective(ctx,W/2,H-py(10),iP,"3");
+    drawObjective(ctx,W-px(8),H-py(8),iP,"4");
+  }
+
+  // ── DAWN OF WAR ─────────────────────────────────────────────────────
+  // Franjas verticales: J1 primeros 12" borde izq, J2 últimos 12" borde der
+  // Exclusión: 4" desde cada borde de zona hacia dentro
+  else if(zoneKey==="dawn_of_war"){
+    fillZ(()=>ctx.rect(0,0,px(12),H),P1,P1);
+    fillZ(()=>ctx.rect(W-px(12),0,px(12),H),P2,P2);
+    // Marcas de exclusión 4"
+    ctx.save();ctx.strokeStyle=P1+"88";ctx.lineWidth=1;ctx.setLineDash([3,5]);
+    ctx.beginPath();ctx.moveTo(px(4),0);ctx.lineTo(px(4),H);ctx.stroke();
+    ctx.strokeStyle=P2+"88";
+    ctx.beginPath();ctx.moveTo(W-px(4),0);ctx.lineTo(W-px(4),H);ctx.stroke();
+    ctx.setLineDash([]);ctx.restore();
+    zoneLabel(px(6),H/2,P1,"J1");
+    zoneLabel(W-px(6),H/2,P2,"J2");
+    // Objetivos: 2 por bando a 4" del borde de zona + centro
+    drawObjective(ctx,px(6),H/2-py(10),iP,"1");
+    drawObjective(ctx,px(6),H/2+py(10),iP,"2");
+    drawObjective(ctx,W/2,H/4,iP,"3");
+    drawObjective(ctx,W/2,H*3/4,iP,"4");
+    drawObjective(ctx,W-px(6),H/2-py(10),iP,"5");
+    drawObjective(ctx,W-px(6),H/2+py(10),iP,"6");
+  }
+
+  // ── SWEEPING ENGAGEMENT ─────────────────────────────────────────────
+  // Diagonal: J1 triángulo sup-izq (16" desde borde largo), J2 inf-der espejo
+  // Exclusión 8" desde la diagonal + 12" desde el centro
+  else if(zoneKey==="sweeping_engagement"){
+    fillZ(()=>{
+      ctx.moveTo(0,0);ctx.lineTo(W,0);
+      ctx.lineTo(W/2,H/2-py(12));
+      ctx.lineTo(0,py(8));ctx.closePath();
+    },P1,P1);
+    fillZ(()=>{
+      ctx.moveTo(W,H);ctx.lineTo(0,H);
+      ctx.lineTo(W/2,H/2+py(12));
+      ctx.lineTo(W,H-py(8));ctx.closePath();
+    },P2,P2);
+    zoneLabel(px(8),py(5),P1,"J1");
+    zoneLabel(W-px(8),H-py(5),P2,"J2");
+    // Objetivos según carta
+    drawObjective(ctx,W/2+px(8),py(8),iP,"1");
+    drawObjective(ctx,px(16),H/2-py(8),iP,"2");
+    drawObjective(ctx,W-px(16),H/2+py(8),iP,"3");
+    drawObjective(ctx,W/2-px(8),H-py(8),iP,"4");
+  }
+
+  // ── SPEARHEAD ASSAULT (legacy) ──────────────────────────────────────
+  else if(zoneKey==="spearhead_assault"){
+    fillZ(()=>{ctx.moveTo(0,py(9));ctx.lineTo(px(15),H/2);ctx.lineTo(0,H-py(9));ctx.closePath();},P1,P1);
+    fillZ(()=>{ctx.moveTo(W,py(9));ctx.lineTo(W-px(15),H/2);ctx.lineTo(W,H-py(9));ctx.closePath();},P2,P2);
+    zoneLabel(px(4),H/2,P1,"J1");zoneLabel(W-px(4),H/2,P2,"J2");
+  }
+}
+
+function drawUnit(ctx,mini,unit,playerColor,W,H,BW,selected,t,auraColors){
+  // drawUnit YA NO dibuja auras — las auras se dibujan aparte con fusión
+  const cx=mini.x*W,cy=mini.y*H,color=playerColor||"#3a5a7a";
+  const [r,g,b]=h2p(color);
+  const inchPx=W/BW;
+  const bsz=(unit.base_size_mm/2/25.4)*inchPx;
+  ctx.save();ctx.beginPath();if(unit.base_type==="oval")ctx.ellipse(cx,cy,bsz,bsz*0.6,0,0,Math.PI*2);else ctx.arc(cx,cy,bsz,0,Math.PI*2);
+  ctx.fillStyle=`rgba(${r},${g},${b},0.15)`;ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=selected?2:1.2;
+  ctx.shadowColor=color;ctx.shadowBlur=selected?14:7;ctx.stroke();ctx.shadowBlur=0;
+  ctx.fillStyle=color;ctx.font=`bold ${Math.max(9,bsz*0.9)}px 'Rajdhani',monospace`;
+  ctx.textAlign="center";ctx.textBaseline="middle";ctx.shadowColor=color;ctx.shadowBlur=5;
+  ctx.fillText(unit.name[0].toUpperCase(),cx,cy);ctx.shadowBlur=0;
+  ctx.font="bold 9px 'Rajdhani',monospace";ctx.fillText(unit.name.split(' ')[0],cx,cy+bsz+4);
+  if(!playerColor){ctx.beginPath();ctx.arc(cx+bsz*0.7,cy-bsz*0.7,5,0,Math.PI*2);ctx.fillStyle="#f97316";ctx.shadowColor="#f97316";ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;ctx.fillStyle="#050d1a";ctx.font="bold 7px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",cx+bsz*0.7,cy-bsz*0.7);}
+  ctx.restore();
+}
+
+// Calcula el centroide ponderado de un grupo de círculos (centro de masa por área)
+// TODO-8: ✅ COMPLETADO — Alerta visual de coherencia de unidad
+// Dibuja líneas de alerta entre figuras de la misma unidad que están a >2"
+function drawCoherency(ctx,minis,W,H,BW){
+  const inchPx=W/BW;
+  const coherenceInch=2; // regla: 2" entre figuras
+  // Agrupar minis por (playerId, unitId)
+  const byUnit={};
+  minis.forEach(mini=>{
+    if(!mini.unitData)return;
+    const key=`${mini.playerId}_${mini.unitData.id}`;
+    if(!byUnit[key])byUnit[key]=[];
+    byUnit[key].push(mini);
+  });
+  Object.values(byUnit).forEach(group=>{
+    if(group.length<2)return;
+    const count=group.length;
+    const required=count>=7?2:1; // 7+ modelos necesitan 2 vecinos a ≤2"
+    group.forEach((mini,i)=>{
+      const cx=mini.x*W,cy=mini.y*H;
+      const bsz=(mini.unitData.base_size_mm/2/25.4)*inchPx;
+      // Distancias a todos los demás del grupo (borde a borde)
+      const distances=group
+        .filter((_,j)=>j!==i)
+        .map(other=>{
+          const ox=other.x*W,oy=other.y*H;
+          const obz=(other.unitData.base_size_mm/2/25.4)*inchPx;
+          const dist=Math.hypot(cx-ox,cy-oy)-(bsz+obz); // borde a borde
+          return {other,dist,ox,oy};
+        })
+        .sort((a,b)=>a.dist-b.dist);
+      // Contar cuántos vecinos están a ≤2"
+      const nearCount=distances.filter(d=>d.dist<=coherenceInch*inchPx).length;
+      if(nearCount<required){
+        // Dibujar alerta — línea al vecino más cercano fuera de rango
+        distances.slice(0,required).forEach(({dist,ox,oy})=>{
+          if(dist>coherenceInch*inchPx){
+            ctx.save();
+            ctx.strokeStyle="#f97316";ctx.lineWidth=1;
+            ctx.setLineDash([3,4]);ctx.globalAlpha=0.7;
+            ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ox,oy);ctx.stroke();
+            ctx.setLineDash([]);
+            // Indicador en la mini fuera de coherencia
+            ctx.beginPath();ctx.arc(cx,cy,bsz+2,0,Math.PI*2);
+            ctx.strokeStyle="#f97316";ctx.lineWidth=1.5;ctx.globalAlpha=0.9;ctx.stroke();
+            ctx.restore();
+          }
+        });
+      }
+    });
+  });
+}
+
+function groupCentroid(circles){
+  let wx=0,wy=0,totalW=0;
+  circles.forEach(({cx,cy,rad})=>{
+    const w=rad*rad; // peso proporcional al área
+    wx+=cx*w;wy+=cy*w;totalW+=w;
+  });
+  return totalW>0?{cx:wx/totalW,cy:wy/totalW}:{cx:circles[0].cx,cy:circles[0].cy};
+}
+
+// Devuelve {cx,cy} del centroide del grupo de movimiento (para colocar overlays)
+// y dibuja las auras fusionadas. fillMode: "fill" | "border"
+function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMini,fillMode){
+  if(!activeAuras.move&&!activeAuras.charge&&!activeAuras.shoot&&!activeAuras.abilities&&!activeAuras.engage) return {};
+  const inchPx=W/BW;
+  const groups={};
+
+  // TODO-3 FIX: clave incluye playerId para separar auras de cada jugador
+  const addCircle=(key,cx,cy,rad,color,label,dash,lineW,pid,opacity=1)=>{
+    const fk=`${pid||'x'}_${key}`;
+    const dp=dash?playerDash(pid):[0];
+    if(!groups[fk])groups[fk]={circles:[],color,label,dash,lineW,dashPattern:dp,opacity};
+    groups[fk].circles.push({cx,cy,rad});
+  };
+
+  // Diferenciación por jugador: tinte muy sutil (15%) para no distorsionar el color de aura
+  // La diferenciación principal viene del agrupamiento separado por playerId
+  const tintAura=(auraCol,playerCol)=>{
+    if(!playerCol) return auraCol;
+    const [ar,ag,ab]=h2p(auraCol),[pr,pg,pb]=h2p(playerCol);
+    const m=(a,b,f)=>Math.round(a*(1-f)+b*f).toString(16).padStart(2,'0');
+    return `#${m(ar,pr,0.15)}${m(ag,pg,0.15)}${m(ab,pb,0.15)}`;
+  };
+
+  // Patrón de dash por jugador (J1 = [5,7], J2 = [3,5], etc.)
+  const playerDash=(pid)=>{
+    const patterns=[[5,7],[2,5],[7,3],[4,8]];
+    const idx=players.findIndex(p=>p.id===pid);
+    return patterns[Math.max(0,idx)%patterns.length];
+  };
+
+  minis.forEach(mini=>{
+    const unit=mini.unitData;if(!unit)return;
+    const player=players.find(p=>p.id===mini.playerId);
+    const pid=mini.playerId,pc=player?.color;
+    const cx=mini.x*W,cy=mini.y*H;
+    const bsz=(unit.base_size_mm/2/25.4)*inchPx;
+    const mv=parseInt(unit.stats?.M)||6;
+    if(activeAuras.engage){
+      addCircle(`engage_${Math.round(bsz+inchPx)}`,cx,cy,bsz+inchPx,tintAura("#f43f5e",pc),'ER 1"',false,1.5,pid);
+    }
+    if(activeAuras.shoot){
+      const mr=Math.max(0,...(unit.ranged_weapons||[]).map(w=>w.range_inches||0));
+      if(mr>0) addCircle(`shoot_${Math.round(bsz+mr*inchPx)}`,cx,cy,bsz+mr*inchPx,tintAura(auraColors.shoot,pc),`AD ${mr}"`,true,1,pid);
+    }
+    if(activeAuras.move){
+      const rad=bsz+mv*inchPx;
+      addCircle(`move_${Math.round(rad)}`,cx,cy,rad,tintAura(auraColors.move,pc),`M ${mv}"`,true,1.5,pid);
+    }
+    if(activeAuras.charge){
+      // TODO-15: 11 círculos con probabilidad 2D6 (resultado 2 al 12)
+      // Probabilidades: nº de combinaciones / 36
+      const D2_PROB=[0,0,1,2,3,4,5,6,5,4,3,2,1]; // índice = resultado dado
+      const maxProb=6; // resultado 7 tiene prob máxima
+      D2_PROB.forEach((prob,result)=>{
+        if(!prob)return;
+        const rad=bsz+(mv+result)*inchPx;
+        const opacity=prob/maxProb; // 0.17 a 1.0
+        const isMedian=result===7;
+        // Usar clave única por resultado para que NO se fusionen entre sí
+        addCircle(`charge_r${result}_${pid}`,cx,cy,rad,
+          tintAura(auraColors.charge,pc),
+          isMedian?`C ${result}"`:"",  // etiqueta solo en el 7 (mediana)
+          true,
+          isMedian?1.5:0.6,  // el 7 más grueso
+          pid,
+          opacity  // opacidad proporcional a probabilidad
+        );
+      });
+    }
+    if(activeAuras.abilities){
+      (unit.abilities||[]).forEach(ab=>{
+        if(!ab.aura||!ab.aura.radius_inches)return;
+        const col=ab.aura.color||auraColors.abilities;
+        const rad=bsz+ab.aura.radius_inches*inchPx;
+        addCircle(`hab_${ab.name}_${col}`,cx,cy,rad,col,ab.aura.display_text,false,1.5,pid);
+      });
+    }
+  });
+
+  const moveCentroids=[];
+
+  Object.entries(groups).forEach(([key,{circles,color,label,dash,lineW,dashPattern,opacity=1}])=>{
+    if(!circles.length)return;
+    const [r,g,b]=h2p(color);
+    const isMoveGroup=key.includes('_move_');
+    const centroid=groupCentroid(circles);
+    if(isMoveGroup) moveCentroids.push({...centroid,rad:circles[0].rad,circles});
+
+    ctx.save();
+
+    if(fillMode==='fill'){
+      ctx.globalAlpha=0.07*opacity;ctx.fillStyle=`rgb(${r},${g},${b})`;
+      circles.forEach(({cx,cy,rad})=>{ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fill();});
+      ctx.globalAlpha=1;
+    }
+
+    const bw=Math.max(1.5,lineW*2);
+    const bOff=document.createElement('canvas');
+    bOff.width=W;bOff.height=H;
+    const bctx=bOff.getContext('2d');
+    bctx.fillStyle='#fff';
+    circles.forEach(({cx,cy,rad})=>{bctx.beginPath();bctx.arc(cx,cy,rad,0,Math.PI*2);bctx.fill();});
+    bctx.globalCompositeOperation='destination-out';
+    circles.forEach(({cx,cy,rad})=>{bctx.beginPath();bctx.arc(cx,cy,Math.max(0,rad-bw),0,Math.PI*2);bctx.fill();});
+    bctx.globalCompositeOperation='source-in';
+    bctx.fillStyle=color;bctx.fillRect(0,0,W,H);
+    ctx.shadowColor=color;ctx.shadowBlur=fillMode==='border'?8:4;
+    ctx.globalAlpha=opacity;
+    ctx.drawImage(bOff,0,0);ctx.shadowBlur=0;ctx.globalAlpha=1;
+
+    if(dash){
+      if(fillMode==='border'){
+        // TODO-6 FIX: dash solo sobre el borde exterior fusionado usando máscara offscreen
+        const dOff=document.createElement('canvas');
+        dOff.width=W;dOff.height=H;
+        const dctx=dOff.getContext('2d');
+        dctx.fillStyle='#fff';
+        circles.forEach(({cx,cy,rad})=>{dctx.beginPath();dctx.arc(cx,cy,rad,0,Math.PI*2);dctx.fill();});
+        dctx.globalCompositeOperation='destination-out';
+        circles.forEach(({cx,cy,rad})=>{dctx.beginPath();dctx.arc(cx,cy,Math.max(0,rad-bw*2),0,Math.PI*2);dctx.fill();});
+        dctx.globalCompositeOperation='source-in';
+        dctx.strokeStyle=color;dctx.lineWidth=lineW*1.5;
+        dctx.setLineDash(dashPattern||[5,7]);dctx.lineDashOffset=-(t*15)%12;
+        circles.forEach(({cx,cy,rad})=>{dctx.beginPath();dctx.arc(cx,cy,rad,0,Math.PI*2);dctx.stroke();});
+        dctx.setLineDash([]);
+        ctx.drawImage(dOff,0,0);
+      } else {
+        ctx.globalAlpha=0.85*opacity;ctx.strokeStyle=color;ctx.lineWidth=lineW;
+        ctx.setLineDash(dashPattern||[5,7]);ctx.lineDashOffset=-(t*15)%12;
+        circles.forEach(({cx,cy,rad})=>{ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.stroke();});
+        ctx.setLineDash([]);ctx.globalAlpha=1;
+      }
+    }
+
+    if(label){
+      ctx.font='bold 9px \'Rajdhani\',monospace';
+      ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';
+      const first=circles[0];
+      // TODO-12 FIX: clampear la posición del texto dentro del tablero
+      const PAD=4;
+      const tx=Math.min(first.cx+first.rad*0.7+3, W-50);
+      const ty=Math.max(PAD+4, Math.min(first.cy-first.rad*0.7, H-PAD));
+      ctx.fillText(label,tx,ty);
+    }
+    ctx.restore();
+  });
+
+  return {moveCentroids};
+}
+
+// ─── ARUCO ───────────────────────────────────────────────────────────────────
+const ARUCO_4X4={
+  0:[[1,0,0,1],[1,1,0,0],[0,1,0,0],[0,0,1,1]],
+  1:[[1,1,0,0],[0,1,1,0],[1,0,0,1],[0,1,0,1]],
+  2:[[0,0,1,1],[1,0,1,0],[0,1,0,1],[1,1,0,0]],
+  3:[[1,0,1,0],[0,0,1,1],[1,1,0,0],[0,1,1,0]],
+};
+const ARUCO_CORNERS=["A — Sup. Izquierda","B — Sup. Derecha","C — Inf. Derecha","D — Inf. Izquierda"];
+const ARUCO_FACTIONS=[
+  {id:"space_marines",name:"Space Marines",color:"#38bdf8",
+   draw:(ctx,cx,cy,sz)=>{
+     const s=sz*0.38;ctx.save();ctx.translate(cx,cy);ctx.strokeStyle="#38bdf8";ctx.fillStyle="#38bdf8";ctx.lineWidth=sz*0.04;
+     ctx.beginPath();ctx.ellipse(0,0,s*0.18,s*0.32,0,0,Math.PI*2);ctx.fill();
+     ctx.beginPath();ctx.moveTo(-s*0.08,-s*0.1);ctx.bezierCurveTo(-s*0.6,-s*0.5,-s*0.9,0,-s*0.6,s*0.3);ctx.bezierCurveTo(-s*0.3,s*0.15,-s*0.15,s*0.05,-s*0.08,s*0.1);ctx.closePath();ctx.fill();
+     ctx.beginPath();ctx.moveTo(s*0.08,-s*0.1);ctx.bezierCurveTo(s*0.6,-s*0.5,s*0.9,0,s*0.6,s*0.3);ctx.bezierCurveTo(s*0.3,s*0.15,s*0.15,s*0.05,s*0.08,s*0.1);ctx.closePath();ctx.fill();
+     ctx.beginPath();ctx.arc(0,-s*0.28,s*0.14,Math.PI,0);ctx.stroke();
+     for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(i*s*0.06,-s*0.38);ctx.lineTo(i*s*0.06,-s*0.28);ctx.stroke();}
+     ctx.restore();
+   }},
+  {id:"raven_guard",name:"Raven Guard",color:"#c8dff5",
+   draw:(ctx,cx,cy,sz)=>{
+     const s=sz*0.38;ctx.save();ctx.translate(cx,cy);ctx.fillStyle="#c8dff5";ctx.strokeStyle="#c8dff5";ctx.lineWidth=sz*0.035;
+     ctx.beginPath();ctx.ellipse(0,s*0.05,s*0.22,s*0.28,-0.2,0,Math.PI*2);ctx.fill();
+     ctx.beginPath();ctx.ellipse(s*0.05,-s*0.22,s*0.14,s*0.12,0.3,0,Math.PI*2);ctx.fill();
+     ctx.beginPath();ctx.moveTo(s*0.15,-s*0.26);ctx.lineTo(s*0.36,-s*0.2);ctx.lineTo(s*0.15,-s*0.16);ctx.closePath();ctx.fill();
+     ctx.beginPath();ctx.moveTo(-s*0.1,-s*0.05);ctx.bezierCurveTo(-s*0.7,-s*0.4,-s*0.85,s*0.1,-s*0.5,s*0.35);ctx.bezierCurveTo(-s*0.25,s*0.2,-s*0.1,s*0.1,-s*0.1,s*0.05);ctx.closePath();ctx.fill();
+     ctx.beginPath();ctx.moveTo(-s*0.1,s*0.28);ctx.lineTo(-s*0.25,s*0.52);ctx.lineTo(0,s*0.42);ctx.lineTo(s*0.15,s*0.52);ctx.lineTo(s*0.1,s*0.28);ctx.closePath();ctx.fill();
+     ctx.restore();
+   }},
+  {id:"aeldari",name:"Aeldari",color:"#22c55e",
+   draw:(ctx,cx,cy,sz)=>{
+     const s=sz*0.38;ctx.save();ctx.translate(cx,cy);ctx.strokeStyle="#22c55e";ctx.lineWidth=sz*0.045;ctx.lineCap="round";
+     ctx.beginPath();ctx.moveTo(-s*0.7,0);ctx.bezierCurveTo(-s*0.4,-s*0.55,s*0.4,-s*0.55,s*0.7,0);ctx.bezierCurveTo(s*0.4,s*0.55,-s*0.4,s*0.55,-s*0.7,0);ctx.stroke();
+     ctx.beginPath();ctx.arc(0,0,s*0.22,0,Math.PI*2);ctx.stroke();
+     ctx.fillStyle="#22c55e";ctx.beginPath();ctx.arc(0,0,s*0.09,0,Math.PI*2);ctx.fill();
+     [[0,-s*0.55],[0,s*0.55],[-s*0.55,0],[s*0.55,0]].forEach(([ex,ey])=>{ctx.beginPath();ctx.moveTo(ex*0.35,ey*0.35);ctx.lineTo(ex,ey);ctx.stroke();});
+     ctx.restore();
+   }},
+  {id:"tyranids",name:"Tiránidos",color:"#a855f7",
+   draw:(ctx,cx,cy,sz)=>{
+     const s=sz*0.38;ctx.save();ctx.translate(cx,cy);ctx.strokeStyle="#a855f7";ctx.fillStyle="#a855f7";ctx.lineWidth=sz*0.045;ctx.lineCap="round";
+     ctx.beginPath();ctx.arc(0,0,s*0.18,0,Math.PI*2);ctx.fill();
+     ctx.lineWidth=sz*0.055;
+     ctx.beginPath();ctx.moveTo(-s*0.12,-s*0.12);ctx.bezierCurveTo(-s*0.35,-s*0.55,-s*0.1,-s*0.75,s*0.1,-s*0.55);ctx.stroke();
+     ctx.beginPath();ctx.moveTo(s*0.12,-s*0.12);ctx.bezierCurveTo(s*0.35,-s*0.55,s*0.1,-s*0.75,-s*0.1,-s*0.55);ctx.stroke();
+     ctx.lineWidth=sz*0.04;
+     ctx.beginPath();ctx.moveTo(-s*0.16,0);ctx.bezierCurveTo(-s*0.55,-s*0.2,-s*0.7,s*0.15,-s*0.45,s*0.4);ctx.stroke();
+     ctx.beginPath();ctx.moveTo(s*0.16,0);ctx.bezierCurveTo(s*0.55,-s*0.2,s*0.7,s*0.15,s*0.45,s*0.4);ctx.stroke();
+     ctx.beginPath();ctx.moveTo(0,s*0.18);ctx.bezierCurveTo(-s*0.1,s*0.5,s*0.25,s*0.65,s*0.1,s*0.8);ctx.stroke();
+     ctx.restore();
+   }},
+];
+
+function renderArucoMarker(canvas,faction,id){
+  const SZ=240;canvas.width=SZ;canvas.height=SZ;
+  const ctx=canvas.getContext("2d");
+  const CELL=SZ/6,B=CELL;
+  // Fondo blanco (borde exterior del ArUco)
+  ctx.fillStyle="#ffffff";ctx.fillRect(0,0,SZ,SZ);
+  // Interior negro
+  ctx.fillStyle="#000000";ctx.fillRect(B*0.4,B*0.4,SZ-B*0.8,SZ-B*0.8);
+  // Bits 4x4
+  const bits=ARUCO_4X4[id];
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++){
+    ctx.fillStyle=bits[r][c]===1?"#ffffff":"#000000";
+    ctx.fillRect(B+c*CELL+1,B+r*CELL+1,CELL-2,CELL-2);
+  }
+  // Símbolo semitransparente
+  ctx.globalAlpha=0.2;faction.draw(ctx,SZ/2,SZ/2,SZ);ctx.globalAlpha=1;
+  // Borde decorativo facción
+  ctx.strokeStyle=faction.color;ctx.lineWidth=3;ctx.globalAlpha=0.55;
+  ctx.strokeRect(3,3,SZ-6,SZ-6);ctx.globalAlpha=1;
+  // ID
+  ctx.fillStyle=faction.color;ctx.font="bold 11px monospace";
+  ctx.textAlign="right";ctx.textBaseline="bottom";
+  ctx.fillText(`ID:${id}`,SZ-5,SZ-3);
+}
+
+function OverlayManager({overlays,setOverlays,players}){
+  const fileRef=useRef(null);
+  const [selId,setSelId]=useState(null);
+
+  // TODO-4: Persistir overlays en localStorage (src en base64)
+  const STORAGE_KEY='wargame_overlays_v1';
+
+  const saveToStorage=(list)=>{
+    try{
+      // Guardar solo los campos necesarios (src puede ser grande — base64)
+      const toSave=list.map(o=>({id:o.id,name:o.name,src:o.src,playerId:o.playerId,opacity:o.opacity,visible:o.visible}));
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(toSave));
+    }catch(e){console.warn('Overlay storage error:',e);}
+  };
+
+  const addOverlay=(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const id=`ov_${Date.now()}`;
+      const newOv={id,name:file.name.replace(/\.[^.]+$/,""),src:ev.target.result,playerId:null,opacity:70,visible:true};
+      setOverlays(prev=>{
+        const next=[...prev,newOv];
+        saveToStorage(next);
+        return next;
+      });
+      setSelId(id);
+    };
+    reader.readAsDataURL(file);
+    e.target.value="";
+  };
+
+  const update=(id,key,val)=>setOverlays(prev=>{
+    const next=prev.map(o=>o.id===id?{...o,[key]:val}:o);
+    saveToStorage(next);
+    return next;
+  });
+
+  const remove=(id)=>{
+    setOverlays(prev=>{
+      const next=prev.filter(o=>o.id!==id);
+      saveToStorage(next);
+      return next;
+    });
+    if(selId===id)setSelId(null);
+  };
+
+  const sel=overlays.find(o=>o.id===selId);
+
+  return(
+    <div>
+      {/* Lista de overlays */}
+      {overlays.length>0&&(
+        <div style={{marginBottom:10}}>
+          {overlays.map(ov=>(
+            <div key={ov.id} onClick={()=>setSelId(ov.id===selId?null:ov.id)}
+              style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",
+                background:selId===ov.id?"rgba(249,115,22,0.08)":C.bg,
+                border:`1px solid ${selId===ov.id?C.accent:C.border}`,
+                borderRadius:2,marginBottom:4,cursor:"pointer",transition:"all .2s"}}>
+              {/* Miniatura */}
+              <div style={{width:28,height:28,borderRadius:2,overflow:"hidden",flexShrink:0,
+                background:"#111",border:`1px solid ${C.border}`}}>
+                <img src={ov.src} style={{width:"100%",height:"100%",objectFit:"contain"}} alt=""/>
+              </div>
+              <span style={{flex:1,fontSize:12,color:selId===ov.id?C.accent:C.text,
+                letterSpacing:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {ov.name}
+              </span>
+              {/* Toggle visible */}
+              <button onClick={e=>{e.stopPropagation();update(ov.id,"visible",!ov.visible);}}
+                style={{padding:"2px 6px",background:"transparent",border:`1px solid ${ov.visible?C.green:C.border}`,
+                  borderRadius:2,cursor:"pointer",color:ov.visible?C.green:C.muted,
+                  fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700}}>
+                {ov.visible?"ON":"OFF"}
+              </button>
+              <button onClick={e=>{e.stopPropagation();remove(ov.id);}}
+                style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,
+                  borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:12}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=C.red}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Controles del overlay seleccionado */}
+      {sel&&(
+        <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,
+          padding:10,marginBottom:10}} className="fade-in">
+          <div style={{fontSize:12,color:C.accent,letterSpacing:2,marginBottom:8}}>
+            AJUSTAR — {sel.name.toUpperCase()}
+          </div>
+          {/* Selector jugador */}
+          <div style={{marginBottom:8}}>
+            <div style={{fontSize:11,color:C.muted,letterSpacing:1,marginBottom:5}}>MOSTRAR EN MINIS DE</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              <button onClick={()=>update(sel.id,"playerId",null)}
+                style={{padding:"3px 8px",background:sel.playerId===null?"rgba(56,189,248,.1)":"transparent",
+                  border:`1px solid ${sel.playerId===null?C.blue:C.border}`,borderRadius:2,cursor:"pointer",
+                  color:sel.playerId===null?C.blue:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700}}>
+                TODOS
+              </button>
+              {players.map(p=>(
+                <button key={p.id} onClick={()=>update(sel.id,"playerId",p.id)}
+                  style={{padding:"3px 8px",background:sel.playerId===p.id?`rgba(${h2rgb(p.color)},.1)`:"transparent",
+                    border:`1px solid ${sel.playerId===p.id?p.color:C.border}`,borderRadius:2,cursor:"pointer",
+                    color:sel.playerId===p.id?p.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700}}>
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Opacidad */}
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:11,color:C.muted,letterSpacing:1,width:52,flexShrink:0}}>OPACIDAD</span>
+            <input type="range" min={10} max={100} step={5} value={sel.opacity}
+              onChange={e=>update(sel.id,"opacity",parseFloat(e.target.value))}
+              style={{flex:1,accentColor:C.accent,height:3}}/>
+            <span style={{fontSize:11,color:C.text,width:32,textAlign:"right",flexShrink:0}}>{sel.opacity}%</span>
+          </div>
+        </div>
+      )}
+
+      {/* Botón añadir */}
+      <button onClick={()=>fileRef.current?.click()}
+        style={{width:"100%",padding:"8px",background:"transparent",
+          border:`1px solid ${C.blue}`,borderRadius:2,cursor:"pointer",
+          color:C.blue,fontFamily:"'Rajdhani',monospace",fontSize:11,
+          fontWeight:700,letterSpacing:2,transition:"all .2s"}}
+        onMouseEnter={e=>e.currentTarget.style.background="rgba(56,189,248,.08)"}
+        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+        + AÑADIR IMAGEN
+      </button>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp"
+        style={{display:"none"}} onChange={addOverlay}/>
+      <div style={{marginTop:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:11,color:C.muted,letterSpacing:1}}>
+          PNG, JPG, SVG, WebP · {overlays.length>0?`${overlays.length} guardada${overlays.length>1?"s":""} en local`:"Se guardan automáticamente"}
+        </span>
+        {overlays.length>0&&(
+          <button onClick={()=>{setOverlays([]);localStorage.removeItem('wargame_overlays_v1');setSelId(null);}}
+            style={{padding:"2px 7px",background:"transparent",border:`1px solid ${C.border}`,
+              borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",
+              fontSize:10,letterSpacing:1}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red;e.currentTarget.style.color=C.red;}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
+            LIMPIAR TODO
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ArucoGenerator(){
+  const [selFaction,setSelFaction]=useState(ARUCO_FACTIONS[0]);
+  const cr0=useRef(null),cr1=useRef(null),cr2=useRef(null),cr3=useRef(null);
+  const canvasRefs=[cr0,cr1,cr2,cr3];
+
+  useEffect(()=>{
+    canvasRefs.forEach((ref,i)=>{
+      if(ref.current)renderArucoMarker(ref.current,selFaction,i);
+    });
+  },[selFaction]);
+
+  const download=(idx)=>{
+    const c=canvasRefs[idx].current;if(!c)return;
+    const a=document.createElement("a");
+    a.download=`aruco_${selFaction.id}_${String.fromCharCode(65+idx)}_id${idx}.png`;
+    a.href=c.toDataURL("image/png");a.click();
+  };
+  const downloadAll=()=>[0,1,2,3].forEach(i=>setTimeout(()=>download(i),i*150));
+
+  return(
+    <div>
+      {/* Selector facción */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+        {ARUCO_FACTIONS.map(f=>(
+          <button key={f.id} onClick={()=>setSelFaction(f)}
+            style={{padding:"4px 10px",border:`1px solid ${selFaction.id===f.id?f.color:C.border}`,borderRadius:2,cursor:"pointer",background:selFaction.id===f.id?`rgba(${h2rgb(f.color)},.12)`:"transparent",color:selFaction.id===f.id?f.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:12,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
+            {f.name.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      {/* Grid de marcadores */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:10}}>
+        {[0,1,2,3].map(i=>(
+          <div key={i} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,padding:10,textAlign:"center"}}>
+            <div style={{fontSize:11,color:selFaction.color,fontWeight:700,letterSpacing:1,marginBottom:4}}>
+              {ARUCO_CORNERS[i]}
+            </div>
+            <canvas ref={canvasRefs[i]}
+              style={{width:100,height:100,display:"block",margin:"0 auto",imageRendering:"pixelated",border:`1px solid ${C.border}`}}/>
+            <button onClick={()=>download(i)}
+              style={{marginTop:6,padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.color=C.blue;}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
+              ↓ PNG
+            </button>
+          </div>
+        ))}
+      </div>
+      {/* Descarga todos */}
+      <button onClick={downloadAll}
+        style={{width:"100%",padding:"8px",background:"transparent",border:`1px solid ${C.green}`,borderRadius:2,cursor:"pointer",color:C.green,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:2,transition:"all .2s"}}
+        onMouseEnter={e=>e.currentTarget.style.background="rgba(34,197,94,.1)"}
+        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+        ↓ DESCARGAR LOS 4 MARCADORES
+      </button>
+      {/* Instrucciones */}
+      <div style={{marginTop:10,padding:"8px 10px",background:C.bg,borderRadius:2,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:11,color:C.muted,letterSpacing:1,lineHeight:1.6}}>
+          Imprime a <span style={{color:C.text}}>3×3 cm exactos</span> · Pega en las <span style={{color:C.text}}>4 esquinas del tapete</span> · La cámara cenital los detecta automáticamente como referencia de calibración
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── COMPONENTES ─────────────────────────────────────────────────────────────
+function StatusBadge({status}){
+  const cfg={pending:{label:"PENDIENTE",color:"#3a5a7a",bg:"transparent"},deployed:{label:"EN JUEGO",color:"#22c55e",bg:"rgba(34,197,94,0.1)"},eliminated:{label:"ELIMINADA",color:"#f43f5e",bg:"rgba(244,63,94,0.1)"}};
+  const s=cfg[status]||cfg.pending;
+  return <span style={{fontSize:12,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:s.color,background:s.bg,border:`1px solid ${s.color}44`}}>{s.label}</span>;
+}
+
+function UnitRow({unit,unitSt,playerColor,onDeploy,onDeployAll,onEliminate,selected,onClick}){
+  // unitSt = {deployed, eliminated, total}
+  const st=unitSt||{deployed:0,eliminated:0,total:unit.count||1};
+  const pending=Math.max(0,st.total-st.deployed-st.eliminated);
+  const allEliminated=st.eliminated>=st.total;
+  const allDeployed=st.deployed+st.eliminated>=st.total;
+  const maxRange=Math.max(0,...(unit.ranged_weapons||[]).map(w=>w.range_inches||0));
+  const isMulti=st.total>1;
+
+  // Estado visual de la fila
+  const rowStatus=allEliminated?"eliminated":st.deployed>0||allDeployed?"deployed":"pending";
+
+  return(
+    <div className={`unit-row ${rowStatus} ${selected?"selected-unit":""}`} onClick={onClick}
+      style={{borderLeft:`3px solid ${allEliminated?"#f43f5e44":st.deployed>0?C.green:playerColor||C.muted}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3,flexWrap:"wrap"}}>
+            <span style={{fontWeight:700,fontSize:13,letterSpacing:1,
+              color:allEliminated?C.muted:playerColor||C.text}}>{unit.name}</span>
+            {/* Contador de figuras */}
+            {isMulti?(
+              <span style={{fontSize:11,color:C.muted,letterSpacing:1}}>
+                <span style={{color:C.green}}>{st.deployed}</span>
+                <span style={{color:C.muted}}>/{st.total}</span>
+                {st.eliminated>0&&<span style={{color:C.red}}> (-{st.eliminated})</span>}
+              </span>
+            ):(
+              <span style={{fontSize:11,color:C.muted}}>×1</span>
+            )}
+            {/* Badge de estado */}
+            {allEliminated&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.red,background:"rgba(244,63,94,0.1)",border:"1px solid #f43f5e44"}}>ELIMINADA</span>}
+            {!allEliminated&&allDeployed&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.green,background:"rgba(34,197,94,0.1)",border:"1px solid #22c55e44"}}>EN JUEGO</span>}
+            {!allEliminated&&!allDeployed&&st.deployed>0&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.yellow,background:"rgba(251,191,36,0.1)",border:"1px solid #fbbf2444"}}>PARCIAL</span>}
+            {!allEliminated&&!allDeployed&&st.deployed===0&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.muted,background:"transparent",border:"1px solid #3a5a7a44"}}>PENDIENTE</span>}
+          </div>
+          <div style={{display:"flex",gap:9,fontSize:11,color:C.muted}}>
+            <span>M:{unit.stats.M}</span><span>T:{unit.stats.T}</span>
+            <span>SV:{unit.stats.SV}</span><span>W:{unit.stats.W}</span>
+            {maxRange>0&&<span style={{color:"#38bdf877"}}>AD:{maxRange}"</span>}
+          </div>
+        </div>
+        {/* Botones */}
+        {!allEliminated&&(
+          <div style={{display:"flex",gap:4,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
+            {pending>0&&(
+              <div style={{display:"flex",gap:3}}>
+                <button onClick={e=>{e.stopPropagation();onDeploy();}}
+                  className="rb gon" style={{padding:"4px 10px",fontSize:11,whiteSpace:"nowrap"}}>
+                  {isMulti?`▶ +FIGURA (${pending})`:"▶ DESPLEGAR"}
+                </button>
+                {isMulti&&pending>1&&(
+                  <button onClick={e=>{e.stopPropagation();onDeployAll();}}
+                    className="rb gon" style={{padding:"4px 8px",fontSize:11,whiteSpace:"nowrap",opacity:0.8}}
+                    title={`Desplegar las ${pending} figuras restantes en cuadrícula`}>
+                    ▶▶
+                  </button>
+                )}
+              </div>
+            )}
+            {st.deployed>0&&(
+              <button onClick={e=>{e.stopPropagation();onEliminate();}}
+                className="rb ron" style={{padding:"3px 8px",fontSize:11,whiteSpace:"nowrap"}}>
+                {isMulti?"✕ -FIGURA":"✕ ELIMINAR"}
+              </button>
+            )}
+          </div>
+        )}
+        {allEliminated&&<span style={{fontSize:11,color:C.muted,flexShrink:0}}>BAJA</span>}
+      </div>
+      {selected&&!allEliminated&&(
+        <div style={{marginTop:5,display:"flex",flexWrap:"wrap",gap:2}}>
+          {(unit.abilities||[]).filter(a=>a.aura).map(a=>(
+            <span key={a.name} className="aura-badge"
+              style={{background:`rgba(${h2rgb(a.aura.color||"#fbbf24")},.1)`,
+                color:a.aura.color||"#fbbf24",border:`1px solid ${a.aura.color||"#fbbf24"}33`}}>
+              {a.aura.radius_inches>0?`${a.aura.radius_inches}" `:""}
+              {a.aura.display_text}
+            </span>
+          ))}
+          {unit.damaged_profile&&<span className="aura-badge" style={{color:C.red,background:"rgba(244,63,94,.1)",border:"1px solid #f43f5e33"}}>DAÑADO: {unit.damaged_profile.effect}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PatrolSelector({playerId,playerColor,playerName,patrol,patrols,system,mode,onSelectPatrol}){
+  const available=patrols.filter(p=>p.system===system&&p.game_mode===mode);
+  const fc=patrol?(FACTION_COLORS[patrol.faction_keyword]||C.blue):C.muted;
+  return(
+    <div className="panel fade-in" style={{borderRadius:2,padding:10,borderLeft:`2px solid ${playerColor}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+        <div style={{width:8,height:8,borderRadius:"50%",background:playerColor,boxShadow:`0 0 6px ${playerColor}`}}/>
+        <span style={{fontWeight:700,fontSize:12,color:playerColor,letterSpacing:1}}>{playerName}</span>
+        {patrol&&<span className="tag" style={{color:fc,background:`rgba(${h2rgb(fc)},.1)`,fontSize:11}}>{patrol.faction}</span>}
+      </div>
+      {available.length===0?(
+        <div style={{fontSize:12,color:C.muted,padding:"6px 0"}}>No hay patrullas para este modo. Importa desde CONFIG.</div>
+      ):(
+        <div style={{display:"flex",flexDirection:"column",gap:3}}>
+          {available.map(p=>{
+            const pfc=FACTION_COLORS[p.faction_keyword]||C.blue;
+            const isSel=patrol?.id===p.id;
+            return(
+              <button key={p.id} onClick={()=>onSelectPatrol(p)}
+                style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",background:isSel?`rgba(${h2rgb(pfc)},.1)`:"transparent",border:`1px solid ${isSel?pfc:C.border}`,borderRadius:2,cursor:"pointer",fontFamily:"'Rajdhani',monospace",textAlign:"left",transition:"all .2s"}}>
+                <div style={{width:5,height:5,borderRadius:"50%",background:pfc,flexShrink:0}}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:11,fontWeight:700,color:isSel?pfc:C.text,letterSpacing:1}}>{p.patrol_name}</div>
+                  <div style={{fontSize:11,color:C.muted}}>{p.faction} · {p.units?.length||0} unidades</div>
+                </div>
+                {isSel&&<span style={{fontSize:12,color:pfc}}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── APP ─────────────────────────────────────────────────────────────────────
+const TABS=["TABLERO","JUGADORES","JUEGO","CONFIG"];
+
+class ErrorBoundary extends React.Component {
+  constructor(props){super(props);this.state={error:null};}
+  static getDerivedStateFromError(e){return{error:e};}
+  render(){
+    if(this.state.error){
+      return(
+        <div style={{background:"#050d1a",color:"#f43f5e",padding:24,fontFamily:"monospace",fontSize:12,minHeight:"100vh"}}>
+          <div style={{marginBottom:12,fontSize:14,fontWeight:700}}>ERROR DE RENDER</div>
+          <div style={{background:"#0a0a0a",padding:12,borderRadius:4,whiteSpace:"pre-wrap",lineHeight:1.6}}>
+            {this.state.error?.message}
+            {'\n\n'}
+            {this.state.error?.stack}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ─── CALIBRACIÓN DE CÁMARA (TODO-9) ─────────────────────────────────────────
+// 4 clicks en las esquinas del tapete → homografía → proyección calibrada
+const CALIB_KEY='wargame_calibration_v1';
+const CALIB_CORNERS=['↖ Superior Izquierda','↗ Superior Derecha','↘ Inferior Derecha','↙ Inferior Izquierda'];
+
+function CameraCalibration(){
+  const videoRef=useRef(null);
+  const canvasRef=useRef(null);
+  const streamRef=useRef(null);
+  const dragRef=useRef(null); // {idx, offsetX, offsetY} — punto siendo arrastrado
+  const [active,setActive]=useState(false);
+  const [points,setPoints]=useState([]);
+  const [savedCalib,setSavedCalib]=useState(()=>{
+    try{const s=localStorage.getItem(CALIB_KEY);return s?JSON.parse(s):null;}catch{return null;}
+  });
+  const [cameras,setCameras]=useState([]);
+  const [selCamId,setSelCamId]=useState('');
+  const pointsRef=useRef([]);
+  useEffect(()=>{pointsRef.current=points;},[points]);
+
+  useEffect(()=>{
+    navigator.mediaDevices?.enumerateDevices().then(devs=>{
+      const cams=devs.filter(d=>d.kind==='videoinput');
+      setCameras(cams);
+      if(cams.length>0)setSelCamId(c=>c||cams[0].deviceId);
+    }).catch(()=>{});
+  },[]);
+
+  const [pendingStream,setPendingStream]=useState(null);
+
+  // Asignar stream al video DESPUÉS de que React lo monte (cuando active=true)
+  useEffect(()=>{
+    if(!active||!pendingStream||!videoRef.current)return;
+    videoRef.current.srcObject=pendingStream;
+    videoRef.current.play().catch(()=>{});
+  },[active,pendingStream]);
+
+  const startCamera=async()=>{
+    try{
+      const constraints=selCamId
+        ?{video:{deviceId:{exact:selCamId},width:{ideal:1280},height:{ideal:720}}}
+        :{video:{width:{ideal:1280},height:{ideal:720}}};
+      const stream=await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current=stream;
+      setPendingStream(stream);
+      setActive(true);setPoints([]);
+    }catch(e){alert('No se pudo acceder a la cámara: '+e.message);}
+  };
+
+  const stopCamera=()=>{
+    streamRef.current?.getTracks().forEach(t=>t.stop());
+    streamRef.current=null;
+    if(videoRef.current){videoRef.current.srcObject=null;}
+    setActive(false);setPoints([]);
+  };
+
+  useEffect(()=>()=>{streamRef.current?.getTracks().forEach(t=>t.stop());},[]);
+
+  // Loop de dibujo — solo puntos sobre canvas transparente
+  useEffect(()=>{
+    if(!active)return;
+    let raf;
+    const draw=()=>{
+      const v=videoRef.current,c=canvasRef.current;
+      if(!v||!c){raf=requestAnimationFrame(draw);return;}
+      const vw=v.videoWidth||640,vh=v.videoHeight||360;
+      if(c.width!==vw||c.height!==vh){c.width=vw;c.height=vh;}
+      const ctx=c.getContext('2d');
+      ctx.clearRect(0,0,c.width,c.height);
+      const pts=pointsRef.current;
+      if(pts.length>1){
+        ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+        pts.forEach(p=>ctx.lineTo(p.x,p.y));
+        if(pts.length===4)ctx.closePath();
+        ctx.strokeStyle='#f97316';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
+        if(pts.length===4){ctx.fillStyle='rgba(249,115,22,0.08)';ctx.fill();}
+      }
+      pts.forEach((p,i)=>{
+        // Sombra para visibilidad
+        ctx.shadowColor='#000';ctx.shadowBlur=6;
+        ctx.beginPath();ctx.arc(p.x,p.y,12,0,Math.PI*2);
+        ctx.fillStyle='#f97316';ctx.fill();
+        ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+        ctx.shadowBlur=0;
+        ctx.fillStyle='#fff';ctx.font='bold 11px Rajdhani,monospace';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(i+1,p.x,p.y);
+      });
+      raf=requestAnimationFrame(draw);
+    };
+    raf=requestAnimationFrame(draw);
+    return()=>cancelAnimationFrame(raf);
+  },[active]);
+
+  // Helpers de coordenadas canvas
+  const toCanvas=(e)=>{
+    const c=canvasRef.current;
+    const rect=c.getBoundingClientRect();
+    return{
+      x:(e.clientX-rect.left)*(c.width/rect.width),
+      y:(e.clientY-rect.top)*(c.height/rect.height),
+    };
+  };
+
+  const findPoint=(x,y)=>{
+    const HIT=18; // radio de hit en px del canvas
+    return pointsRef.current.findIndex(p=>Math.hypot(p.x-x,p.y-y)<HIT);
+  };
+
+  const handleMouseDown=(e)=>{
+    const {x,y}=toCanvas(e);
+    const idx=findPoint(x,y);
+    if(idx>=0){
+      // Arrastrar punto existente
+      dragRef.current={idx,ox:x-pointsRef.current[idx].x,oy:y-pointsRef.current[idx].y};
+      e.currentTarget.style.cursor='grabbing';
+    } else if(points.length<4){
+      // Añadir nuevo punto
+      setPoints(prev=>[...prev,{x,y}]);
+    }
+  };
+
+  const handleMouseMove=(e)=>{
+    if(!dragRef.current)return;
+    const {x,y}=toCanvas(e);
+    const {idx,ox,oy}=dragRef.current;
+    setPoints(prev=>prev.map((p,i)=>i===idx?{x:x-ox,y:y-oy}:p));
+  };
+
+  const handleMouseUp=(e)=>{
+    dragRef.current=null;
+    e.currentTarget.style.cursor=points.length<4?'crosshair':'default';
+  };
+
+  const saveCalibration=()=>{
+    if(points.length!==4)return;
+    const W=canvasRef.current.width,H=canvasRef.current.height;
+    const normalized=points.map(p=>({x:p.x/W,y:p.y/H}));
+    const calib={points:normalized,camW:W,camH:H,date:new Date().toLocaleDateString()};
+    localStorage.setItem(CALIB_KEY,JSON.stringify(calib));
+    setSavedCalib(calib);
+    stopCamera();
+  };
+
+  const clearCalibration=()=>{localStorage.removeItem(CALIB_KEY);setSavedCalib(null);};
+
+  // Cursor dinámico según si hay punto bajo el cursor
+  const handleMouseMoveCanvas=(e)=>{
+    handleMouseMove(e);
+    if(dragRef.current)return;
+    const {x,y}=toCanvas(e);
+    const hit=findPoint(x,y)>=0;
+    e.currentTarget.style.cursor=hit?'grab':points.length<4?'crosshair':'default';
+  };
+
+  return(
+    <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+      <div style={{color:C.accent,fontSize:12,letterSpacing:2,marginBottom:10}}>CALIBRACIÓN DE CÁMARA</div>
+      <div style={{fontSize:12,color:C.muted,lineHeight:1.5,marginBottom:10}}>
+        Sin impresora. Apunta la cámara al tapete, haz click en las 4 esquinas y arrastra para ajustar.
+      </div>
+
+      {/* Video ÚNICO — siempre en el DOM */}
+      {savedCalib&&!active&&(
+        <div style={{background:'rgba(34,197,94,0.08)',border:'1px solid #22c55e44',borderRadius:2,
+          padding:8,marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <div style={{fontSize:11,color:C.green,fontWeight:700,letterSpacing:1}}>✓ CALIBRADO</div>
+            <div style={{fontSize:11,color:C.muted}}>{savedCalib.date} · {savedCalib.camW}×{savedCalib.camH}px</div>
+          </div>
+          <button onClick={clearCalibration} className="rb" style={{padding:'2px 8px',fontSize:11,color:C.red,borderColor:C.red}}>BORRAR</button>
+        </div>
+      )}
+
+      {active&&(
+        <div style={{marginBottom:10}}>
+          <div style={{position:'relative',borderRadius:2,overflow:'hidden',
+            border:`1px solid ${C.border}`,lineHeight:0}}>
+            {/* Video dentro del contenedor relativo — da la altura */}
+            <video ref={videoRef} playsInline muted autoPlay
+              style={{display:'block',width:'100%',height:'auto',maxHeight:360}}/>
+            {/* Canvas encima — puntos arrastrables, fondo transparente */}
+            <canvas ref={canvasRef}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMoveCanvas}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',
+                cursor:points.length<4?'crosshair':'default',zIndex:1}}/>
+            <div style={{position:'absolute',top:8,left:8,background:'rgba(5,13,26,0.85)',
+              padding:'4px 10px',borderRadius:2,fontSize:11,color:C.accent,fontWeight:700,
+              letterSpacing:1,zIndex:2,pointerEvents:'none'}}>
+              {points.length<4
+                ?`${points.length+1}/4 — Click en esquina ${CALIB_CORNERS[points.length]}`
+                :'✓ Arrastra para ajustar · Guarda la calibración'}
+            </div>
+          </div>
+          <div style={{display:'flex',gap:6,marginTop:6}}>
+            <button onClick={()=>setPoints(prev=>prev.slice(0,-1))} disabled={!points.length}
+              className="rb" style={{padding:'4px 10px',fontSize:11,opacity:points.length?1:0.4}}>↩ DESHACER</button>
+            <button onClick={saveCalibration} disabled={points.length!==4} className="rb"
+              style={{padding:'4px 14px',fontSize:11,flex:1,
+                borderColor:points.length===4?C.green:C.border,
+                color:points.length===4?C.green:C.muted,
+                background:points.length===4?'rgba(34,197,94,0.08)':'transparent'}}>
+              {points.length===4?'✓ GUARDAR CALIBRACIÓN':`Marca ${4-points.length} esquina${4-points.length!==1?'s':''} más`}
+            </button>
+            <button onClick={stopCamera} className="rb"
+              style={{padding:'4px 10px',fontSize:11,color:C.red,borderColor:C.red}}>✕</button>
+          </div>
+        </div>
+      )}
+
+      {!active&&(
+        <div style={{marginTop:8}}>
+          {cameras.length>1&&(
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:11,color:C.muted,letterSpacing:1,marginBottom:5}}>CÁMARA</div>
+              <select value={selCamId} onChange={e=>setSelCamId(e.target.value)}
+                style={{width:'100%',background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,
+                  color:C.text,fontFamily:"'Rajdhani',monospace",fontSize:12,padding:'5px 8px',cursor:'pointer'}}>
+                {cameras.map((c,i)=>(
+                  <option key={c.deviceId} value={c.deviceId}>
+                    {c.label||`Cámara ${i+1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button onClick={startCamera}
+            style={{width:'100%',padding:'9px',background:'transparent',
+              border:`1px solid ${C.blue}`,borderRadius:2,cursor:'pointer',
+              color:C.blue,fontFamily:"'Rajdhani',monospace",fontSize:11,
+              fontWeight:700,letterSpacing:2,transition:'all .2s'}}
+            onMouseEnter={e=>e.currentTarget.style.background='rgba(56,189,248,.08)'}
+            onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+            {savedCalib?'↺ RECALIBRAR CÁMARA':'⊙ INICIAR CALIBRACIÓN'}
+          </button>
+        </div>
+      )}
+
+      {savedCalib&&(
+        <div style={{marginTop:8,fontSize:11,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>
+          {savedCalib.points.map((p,i)=>
+            `${i+1}:(${(p.x*100).toFixed(0)}%,${(p.y*100).toFixed(0)}%)`
+          ).join(' · ')}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App(){
+  const [activeSystem,setActiveSystem]=useState("wh40k");
+  const [activeMode,setActiveMode]=useState("combat_patrol");
+  const [players,setPlayers]=useState([{id:1,name:"JUGADOR I",color:PLAYER_COLORS[0]},{id:2,name:"JUGADOR II",color:PLAYER_COLORS[1]}]);
+  const [playerPatrols,setPlayerPatrols]=useState({});
+  const [unitStatus,setUnitStatus]=useState({});
+  const [minis,setMinis]=useState([]);
+  const [selMini,setSelMini]=useState(null);
+  const [assignMenu,setAssignMenu]=useState(null);
+  const [tab,setTab]=useState("TABLERO");
+  const [fullscreen,setFullscreen]=useState(false);
+  const [activeAuras,setActiveAuras]=useState({move:false,charge:false,shoot:false,abilities:false,engage:false});
+  const prevAuras=useRef({move:true,charge:true,shoot:true,abilities:true,engage:false});
+  const [auraFillMode,setAuraFillMode]=useState("fill"); // "fill" | "border"
+  const [activeZone,setActiveZone]=useState(null);
+  const [showDeployMenu,setShowDeployMenu]=useState(false);
+  const [showLegend,setShowLegend]=useState(false);
+  const [tick,setTick]=useState(0);
+  const [zoom,setZoom]=useState(1);
+  const [pan,setPan]=useState({x:0,y:0});
+  const isPanning=useRef(false);
+  const lastPan=useRef({x:0,y:0});
+  const [selUnit,setSelUnit]=useState(null);
+  const [patrols,setPatrols]=useState(EMBEDDED_PATROLS);
+  // Overlays personalizados (logos, imágenes)
+  // TODO-4: Cargar overlays persistidos desde localStorage al iniciar
+  const [overlays,setOverlays]=useState(()=>{
+    try{
+      const saved=localStorage.getItem('wargame_overlays_v1');
+      return saved?JSON.parse(saved):[];
+    }catch{return[];}
+  });
+  const overlayImgCache=useRef({});
+  // Colores de auras configurables
+  const [auraColors,setAuraColors]=useState({
+    move:"#22c55e",
+    charge:"#a855f7",
+    shoot:"#38bdf8",
+    abilities:"#fbbf24",
+    engage:"#f43f5e",
+  });
+  const [apiKey,setApiKey]=useState("");
+  const [showApiKey,setShowApiKey]=useState(false);
+  const [pdfLoading,setPdfLoading]=useState(false);
+  const [pdfStatus,setPdfStatus]=useState(null);
+  const [dragOver,setDragOver]=useState(false);
+  const fileRef=useRef(null);
+  const canvasRef=useRef(null);
+
+  useEffect(()=>{const i=setInterval(()=>setTick(x=>x+1),80);return()=>clearInterval(i);},[]);
+  useEffect(()=>{if(!showDeployMenu)return;const fn=()=>setShowDeployMenu(false);document.addEventListener('click',fn);return()=>document.removeEventListener('click',fn);},[showDeployMenu]);
+
+  const changeSystem=(sys)=>{setActiveSystem(sys);setActiveMode(Object.keys(GAME_SYSTEMS[sys].modes)[0]);setPlayerPatrols({});setUnitStatus({});setMinis([]);};
+  const changeMode=(mode)=>{setActiveMode(mode);setPlayerPatrols({});setUnitStatus({});setMinis([]);};
+
+  const selectPatrol=(playerId,patrol)=>{
+    setPlayerPatrols(prev=>({...prev,[playerId]:patrol}));
+    // Estado por unidad: {deployed: 0, eliminated: 0, total: count}
+    const initial={};
+    (patrol.units||[]).forEach(u=>{
+      initial[u.id]={deployed:0,eliminated:0,total:u.count||1};
+    });
+    setUnitStatus(prev=>({...prev,[playerId]:initial}));
+    setMinis(prev=>prev.filter(m=>m.playerId!==playerId));
+  };
+
+  const deployUnit=(playerId,unit,patrol)=>{
+    const st=unitStatus[playerId]?.[unit.id]||{deployed:0,eliminated:0,total:unit.count||1};
+    if(st.deployed>=st.total)return; // ya todas desplegadas
+    // Cada figura tiene su propio id único en el tablero
+    const figIdx=st.deployed; // índice de esta figura
+    const newMini={
+      id:`mini_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+      unitData:{...unit,faction_keyword:patrol.faction_keyword},
+      figureIndex:figIdx,
+      x:playerId===1?0.05+Math.random()*0.18:0.77+Math.random()*0.18,
+      y:0.05+Math.random()*0.9,
+      playerId,
+    };
+    setMinis(prev=>[...prev,newMini]);
+    setUnitStatus(prev=>({
+      ...prev,
+      [playerId]:{
+        ...prev[playerId],
+        [unit.id]:{...st,deployed:st.deployed+1},
+      }
+    }));
+  };
+
+  // TODO-10: Desplegar toda la unidad de golpe en cuadrícula con 2" de separación
+  const deployAllUnit=(playerId,unit,patrol)=>{
+    const st=unitStatus[playerId]?.[unit.id]||{deployed:0,eliminated:0,total:unit.count||1};
+    const pending=Math.max(0,st.total-st.deployed-st.eliminated);
+    if(!pending)return;
+    const modeInfo=GAME_SYSTEMS[activeSystem].modes[activeMode];
+    const BW=modeInfo.w; // ancho del tablero en pulgadas
+    const BH=modeInfo.h;
+    // Separación entre figuras: 1.5" (dentro de la coherencia de 2")
+    const sepInch=1.5;
+    const sepX=sepInch/BW; // en espacio normalizado (0-1)
+    const sepY=sepInch/BH;
+    // Punto de inicio: borde del jugador con margen
+    const startX=playerId===1?0.04:0.96;
+    const startY=0.05;
+    const cols=playerId===1?Math.floor(0.2/sepX):Math.floor(0.2/sepX);
+    const newMinis=[];
+    for(let i=0;i<pending;i++){
+      const col=i%Math.max(1,cols);
+      const row=Math.floor(i/Math.max(1,cols));
+      const x=playerId===1
+        ?startX+col*sepX
+        :startX-col*sepX;
+      const y=startY+row*sepY;
+      newMinis.push({
+        id:`mini_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,
+        unitData:{...unit,faction_keyword:patrol.faction_keyword},
+        figureIndex:st.deployed+i,
+        x:Math.max(0.01,Math.min(0.99,x)),
+        y:Math.max(0.01,Math.min(0.99,y)),
+        playerId,
+      });
+    }
+    setMinis(prev=>[...prev,...newMinis]);
+    setUnitStatus(prev=>({
+      ...prev,
+      [playerId]:{
+        ...prev[playerId],
+        [unit.id]:{...st,deployed:st.deployed+pending},
+      }
+    }));
+  };
+
+  const eliminateUnit=(playerId,unitId,miniId)=>{
+    // Eliminar la mini específica del tablero
+    setMinis(prev=>prev.filter(m=>m.id!==miniId));
+    // Incrementar contador de eliminadas
+    setUnitStatus(prev=>{
+      const st=prev[playerId]?.[unitId]||{deployed:1,eliminated:0,total:1};
+      return{...prev,[playerId]:{...prev[playerId],[unitId]:{...st,deployed:Math.max(0,st.deployed-1),eliminated:st.eliminated+1}}};
+    });
+  };
+
+  const removeMiniById=(miniId)=>{
+    const mini=minis.find(m=>m.id===miniId);
+    if(mini&&mini.playerId&&mini.unitData)eliminateUnit(mini.playerId,mini.unitData.id,miniId);
+    else setMinis(prev=>prev.filter(m=>m.id!==miniId));
+    setSelMini(null);setAssignMenu(null);
+  };
+
+  const sysInfo=GAME_SYSTEMS[activeSystem];
+  const modeInfo=sysInfo.modes[activeMode];
+
+  useEffect(()=>{
+    if(tab!=="TABLERO"&&!fullscreen)return;
+    const canvas=canvasRef.current;if(!canvas)return;
+    // Sincronizar tamaño interno con CSS para nitidez
+    const dpr=window.devicePixelRatio||1;
+    const cssW=canvas.clientWidth||700;
+    const cssH=canvas.clientHeight||520;
+    if(canvas.width!==Math.round(cssW*dpr)||canvas.height!==Math.round(cssH*dpr)){
+      canvas.width=Math.round(cssW*dpr);
+      canvas.height=Math.round(cssH*dpr);
+    }
+    const ctx=canvas.getContext("2d");
+    ctx.setTransform(1,0,0,1,0,0);
+    // W y H son siempre el tamaño CSS (en píxeles de dispositivo)
+    const W=canvas.width/dpr,H=canvas.height/dpr;
+    // Escalar para pantallas HiDPI
+    ctx.scale(dpr,dpr);
+
+    // Calcular fit-base: escala para que el tablero quepa en el canvas con 5% de margen
+    const MARGIN=0.05;
+    const BW=modeInfo.w,BH=modeInfo.h;
+    const fitScale=Math.min(W*(1-MARGIN*2)/W, H*(1-MARGIN*2)/H);
+    // fitScale siempre 1 aquí porque W/W=1 — lo que queremos es escalar el TABLERO (700×520) al canvas
+    // Escala base: cuántos px del canvas por px lógico del tablero
+    const baseScaleX=W/700;
+    const baseScaleY=H/520;
+    const baseScale=Math.min(baseScaleX,baseScaleY)*(1-MARGIN*2);
+    // Offset para centrar el tablero en el canvas
+    const boardW=700*baseScale;
+    const boardH=520*baseScale;
+    const baseOffX=(W-boardW)/2;
+    const baseOffY=(H-boardH)/2;
+    // Guardar para handlers de click/drag
+    baseScaleRef.current=baseScale;
+    baseOffRef.current={x:baseOffX,y:baseOffY};
+
+    const t=tick*0.02;
+
+    ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+    ctx.save();
+    // Aplicar: centrado base + zoom/pan del usuario encima
+    ctx.translate(baseOffX+pan.x,baseOffY+pan.y);
+    ctx.scale(baseScale*zoom,baseScale*zoom);
+
+    // Dimensiones lógicas del tablero (siempre 700×520 para todos los cálculos)
+    const LW=700,LH=520;
+    ctx.strokeStyle="rgba(14,42,74,0.5)";ctx.lineWidth=0.4/baseScale;
+    for(let x=0;x<=LW;x+=LW/BW){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,LH);ctx.stroke();}
+    for(let y=0;y<=LH;y+=LH/BH){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(LW,y);ctx.stroke();}
+    if(activeZone)drawDeploymentZone(ctx,LW,LH,BW,BH,activeZone);
+    // Borde completo del tablero
+    ctx.strokeStyle=C.accent;ctx.lineWidth=1.5/baseScale;
+    ctx.strokeRect(0,0,LW,LH);
+    [[0,0],[LW,0],[0,LH],[LW,LH]].forEach(([x,y])=>{
+      const s=20/baseScale,ox=x===0?1:-1,oy=y===0?1:-1;
+      ctx.strokeStyle=C.accent;ctx.lineWidth=3/baseScale;
+      ctx.beginPath();ctx.moveTo(x+ox*s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+oy*s);ctx.stroke();
+    });
+    // Auras fusionadas — si hay selección múltiple, solo mostrar auras de las seleccionadas
+    const aurasFor=selMinis.size>0?minis.filter(m=>selMinis.has(m.id)):minis;
+    const {moveCentroids=[]}=drawMergedAuras(ctx,aurasFor,players,LW,LH,BW,t,activeAuras,auraColors,selMini,auraFillMode);
+    // Minis encima
+    minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,LW,LH,BW,selMini===mini.id||selMinis.has(mini.id),t,auraColors);});
+    // TODO-8: Alertas de coherencia de unidad (2")
+    drawCoherency(ctx,minis,LW,LH,BW);
+    // Overlays personalizados — 1 símbolo por grupo fusionado, centrado en el centroide
+    overlays.forEach(ov=>{
+      if(!ov.visible||!ov.src)return;
+      let img=overlayImgCache.current[ov.id];
+      if(!img){img=new Image();img.src=ov.src;overlayImgCache.current[ov.id]=img;}
+      if(!img.complete)return;
+      const inchPx=LW/modeInfo.w;
+
+      // Agrupar minis por grupo de movimiento — misma clave que drawMergedAuras (pid_move_rad)
+      const minisByGroup={};
+      minis.forEach(mini=>{
+        if(ov.playerId && mini.playerId!==ov.playerId)return;
+        const unit=mini.unitData;if(!unit)return;
+        const bsz=(unit.base_size_mm/2/25.4)*inchPx;
+        const mv=parseInt(unit.stats?.M)||6;
+        const rad=bsz+mv*inchPx;
+        const key=`${mini.playerId||'x'}_move_${Math.round(rad)}`;
+        if(!minisByGroup[key])minisByGroup[key]=[];
+        minisByGroup[key].push({mini,unit,rad});
+      });
+
+      // Por cada grupo, un símbolo centrado en el centroide — coordenadas en espacio LW×LH
+      Object.values(minisByGroup).forEach(members=>{
+        if(!members.length)return;
+        const circles=members.map(({mini,rad})=>({cx:mini.x*LW,cy:mini.y*LH,rad}));
+        const centroid=groupCentroid(circles);
+        const rad=members[0].rad;
+        const drawR=rad*0.82;
+        const player=players.find(p=>p.id===members[0].mini.playerId);
+        const col=player?.color||C.accent;
+        const [r,g,b]=h2p(col);
+
+        ctx.save();
+        ctx.beginPath();ctx.arc(centroid.cx,centroid.cy,drawR,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${r},${g},${b},0.06)`;ctx.fill();
+        ctx.beginPath();ctx.arc(centroid.cx,centroid.cy,drawR,0,Math.PI*2);ctx.clip();
+        const iw=img.naturalWidth||img.width||100;
+        const ih=img.naturalHeight||img.height||100;
+        const aspect=iw/ih;
+        let dw,dh;
+        if(aspect>=1){dw=drawR*2;dh=dw/aspect;}
+        else{dh=drawR*2;dw=dh*aspect;}
+        const offSz=Math.ceil(Math.max(dw,dh));
+        const off=document.createElement('canvas');
+        off.width=offSz;off.height=offSz;
+        const octx=off.getContext('2d');
+        const ox=(offSz-dw)/2,oy=(offSz-dh)/2;
+        octx.drawImage(img,ox,oy,dw,dh);
+        octx.globalCompositeOperation='multiply';
+        octx.fillStyle=col;octx.fillRect(0,0,offSz,offSz);
+        octx.globalCompositeOperation='destination-in';
+        octx.drawImage(img,ox,oy,dw,dh);
+        ctx.globalAlpha=(ov.opacity/100)*0.8;
+        ctx.drawImage(off,centroid.cx-offSz/2,centroid.cy-offSz/2,offSz,offSz);
+        ctx.globalAlpha=1;
+        ctx.restore();
+      });
+    });
+
+    // Highlight de minis seleccionadas (selección múltiple)
+    if(selMinis.size>0){
+      minis.forEach(mini=>{
+        if(!selMinis.has(mini.id))return;
+        const unit=mini.unitData;if(!unit)return;
+        const cx=mini.x*LW,cy=mini.y*LH;
+        const inchPx=LW/BW;
+        const bsz=(unit.base_size_mm/2/25.4)*inchPx;
+        ctx.save();
+        ctx.beginPath();ctx.arc(cx,cy,bsz+3,0,Math.PI*2);
+        ctx.strokeStyle="#ffffff";ctx.lineWidth=2;ctx.setLineDash([3,3]);
+        ctx.globalAlpha=0.8;ctx.stroke();
+        ctx.setLineDash([]);ctx.globalAlpha=1;
+        ctx.restore();
+      });
+    }
+
+    // Rectángulo de selección en curso
+    if(selRect){
+      const rx=Math.min(selRect.x0,selRect.x1)*LW;
+      const ry=Math.min(selRect.y0,selRect.y1)*LH;
+      const rw=(Math.abs(selRect.x1-selRect.x0))*LW;
+      const rh=(Math.abs(selRect.y1-selRect.y0))*LH;
+      ctx.save();
+      ctx.strokeStyle="#ffffff";ctx.lineWidth=1;ctx.setLineDash([4,4]);
+      ctx.globalAlpha=0.7;ctx.strokeRect(rx,ry,rw,rh);
+      ctx.fillStyle="rgba(255,255,255,0.06)";ctx.fillRect(rx,ry,rw,rh);
+      ctx.setLineDash([]);ctx.globalAlpha=1;
+      ctx.restore();
+    }
+
+    ctx.restore();
+  },[tab,fullscreen,minis,players,selMini,selMinis,selRect,tick,activeAuras,activeZone,modeInfo,zoom,pan,overlays,auraFillMode,auraColors]);
+
+  // Zoom con rueda del ratón
+  // Zoom con rueda — centrado en el cursor
+  const handleWheel=(e)=>{
+    e.preventDefault();
+    const factor=e.deltaY<0?1.15:1/1.15;
+    const rect=canvasRef.current.getBoundingClientRect();
+    const dpr=window.devicePixelRatio||1;
+    const rawX=(e.clientX-rect.left)*(canvasRef.current.width/rect.width)/dpr;
+    const rawY=(e.clientY-rect.top)*(canvasRef.current.height/rect.height)/dpr;
+    const bo=baseOffRef.current;
+    const cx=rawX-bo.x;const cy=rawY-bo.y;
+    setZoom(prev=>{
+      const nz=Math.max(0.5,Math.min(8,prev*factor));
+      setPan(pp=>({x:cx-(cx-pp.x)*(nz/prev),y:cy-(cy-pp.y)*(nz/prev)}));
+      return nz;
+    });
+  };
+
+  const resetZoom=()=>{setZoom(1);setPan({x:0,y:0});};
+
+  // TODO-5: ✅ COMPLETADO — Selector rectangular de múltiples minis con movimiento de grupo
+  const [selMinis,setSelMinis]=useState(new Set());
+  const [selRect,setSelRect]=useState(null);
+  const isDrawingRect=useRef(false);
+  const rectStart=useRef(null);
+  const shiftRef=useRef(false); // para acumular selección con Shift al soltar rect
+  const isDraggingMini=useRef(false);
+  const isDraggingGroup=useRef(false);
+  const groupDragStart=useRef(null);
+  const mouseDownPos=useRef(null);
+  const baseScaleRef=useRef(1);
+  const baseOffRef=useRef({x:0,y:0});
+  const DRAG_THRESHOLD=4;
+
+  const eventToBoard=(e)=>{
+    const rect=canvasRef.current.getBoundingClientRect();
+    const dpr=window.devicePixelRatio||1;
+    const rawX=(e.clientX-rect.left)*(canvasRef.current.width/rect.width)/dpr;
+    const rawY=(e.clientY-rect.top)*(canvasRef.current.height/rect.height)/dpr;
+    const bs=baseScaleRef.current,bo=baseOffRef.current;
+    return{bx:Math.max(0,Math.min(1,((rawX-bo.x-pan.x)/(bs*zoom))/700)),by:Math.max(0,Math.min(1,((rawY-bo.y-pan.y)/(bs*zoom))/520)),rawX,rawY};
+  };
+
+  useEffect(()=>{
+    const onKey=(e)=>{
+      if(e.key==='Escape'){
+        setSelMinis(new Set());setSelRect(null);setSelMini(null);setAssignMenu(null);
+        setFullscreen(false); // salir de fullscreen con Escape
+      }
+    };
+    document.addEventListener('keydown',onKey);
+    return()=>document.removeEventListener('keydown',onKey);
+  },[]);
+
+  useEffect(()=>{
+    const onUp=()=>{
+      isPanning.current=false;isDraggingMini.current=false;isDraggingGroup.current=false;
+      isDrawingRect.current=false;mouseDownPos.current=null;groupDragStart.current=null;
+      if(selRect){
+        const x0=Math.min(selRect.x0,selRect.x1),x1=Math.max(selRect.x0,selRect.x1);
+        const y0=Math.min(selRect.y0,selRect.y1),y1=Math.max(selRect.y0,selRect.y1);
+        const inside=new Set(minis.filter(m=>m.x>=x0&&m.x<=x1&&m.y>=y0&&m.y<=y1).map(m=>m.id));
+        if(inside.size>0){
+          if(shiftRef.current)setSelMinis(prev=>new Set([...prev,...inside]));
+          else setSelMinis(inside);
+        } else if(!shiftRef.current) setSelMinis(new Set());
+        setSelRect(null);
+      }
+    };
+    document.addEventListener('mouseup',onUp);
+    return()=>document.removeEventListener('mouseup',onUp);
+  },[selRect,minis]);
+
+  const handleMouseDown=(e)=>{
+    mouseDownPos.current={x:e.clientX,y:e.clientY};
+    isDraggingMini.current=false;isDraggingGroup.current=false;isDrawingRect.current=false;
+    const {bx,by,rawX,rawY}=eventToBoard(e);
+    const bs=baseScaleRef.current,bo=baseOffRef.current;
+    let closest=null,minDist=0.06/(bs*zoom);
+    minis.forEach(m=>{const d=Math.hypot(m.x-bx,m.y-by);if(d<minDist){minDist=d;closest=m;}});
+    if(closest){
+      if(e.shiftKey){
+        // Shift+click: añadir/quitar de la selección múltiple
+        setSelMinis(prev=>{
+          const next=new Set(prev);
+          if(next.has(closest.id))next.delete(closest.id);
+          else next.add(closest.id);
+          return next;
+        });
+        setSelMini(null);setAssignMenu(null);
+      } else if(selMinis.has(closest.id)){
+        // Click en mini ya seleccionada → preparar drag de grupo
+        isDraggingGroup.current=true;
+        groupDragStart.current={bx,by,positions:Object.fromEntries(minis.filter(m=>selMinis.has(m.id)).map(m=>[m.id,{x:m.x,y:m.y}]))};
+      } else {
+        // Click normal → selección individual
+        setSelMinis(new Set());setSelMini(closest.id);setAssignMenu(null);isDraggingMini.current=true;
+      }
+    } else {
+      setSelMini(null);setAssignMenu(null);
+      if(selMinis.size>0){setSelMinis(new Set());return;}
+      isDrawingRect.current=true;rectStart.current={bx,by};
+      shiftRef.current=e.shiftKey;
+      setSelRect({x0:bx,y0:by,x1:bx,y1:by});
+      isPanning.current=true;
+      lastPan.current={x:rawX-bo.x-pan.x,y:rawY-bo.y-pan.y};
+    }
+  };
+
+  const handleMouseMove=(e)=>{
+    if(!e.buttons){isPanning.current=false;isDraggingMini.current=false;isDraggingGroup.current=false;isDrawingRect.current=false;return;}
+    const moved=mouseDownPos.current&&Math.hypot(e.clientX-mouseDownPos.current.x,e.clientY-mouseDownPos.current.y)>DRAG_THRESHOLD;
+    const {bx,by,rawX,rawY}=eventToBoard(e);
+    if(isDraggingGroup.current&&moved&&groupDragStart.current){
+      const dx=bx-groupDragStart.current.bx,dy=by-groupDragStart.current.by;
+      setMinis(prev=>prev.map(m=>{
+        if(!selMinis.has(m.id))return m;
+        const orig=groupDragStart.current.positions[m.id];
+        return{...m,x:Math.max(0,Math.min(1,orig.x+dx)),y:Math.max(0,Math.min(1,orig.y+dy))};
+      }));
+      return;
+    }
+    if(selMini&&isDraggingMini.current&&moved){handleCanvasDrag(e);return;}
+    if(isDrawingRect.current&&moved&&rectStart.current){
+      isPanning.current=false;
+      setSelRect({x0:rectStart.current.bx,y0:rectStart.current.by,x1:bx,y1:by});
+      return;
+    }
+    if(!isPanning.current||!moved)return;
+    const bo=baseOffRef.current;
+    setPan({x:rawX-bo.x-lastPan.current.x,y:rawY-bo.y-lastPan.current.y});
+  };
+
+  const handleMouseUp=()=>{isPanning.current=false;isDraggingMini.current=false;mouseDownPos.current=null;};
+
+  const handleCanvasClick=(e)=>{
+    const {bx,by}=eventToBoard(e);
+    const rect=canvasRef.current.getBoundingClientRect();
+    const bs=baseScaleRef.current;
+    let closest=null,minDist=0.06/(bs*zoom);
+    minis.forEach(m=>{const d=Math.hypot(m.x-bx,m.y-by);if(d<minDist){minDist=d;closest=m;}});
+    if(closest){setSelMini(closest.id);setAssignMenu({miniId:closest.id,x:e.clientX-rect.left,y:e.clientY-rect.top});}
+    else{setSelMini(null);setAssignMenu(null);}
+  };
+
+  const handleCanvasDrag=(e)=>{
+    if(!selMini)return;
+    const {bx,by}=eventToBoard(e);
+    setMinis(prev=>prev.map(m=>m.id===selMini?{...m,x:bx,y:by}:m));
+    setAssignMenu(null);
+  };
+
+  const gameStats=useMemo(()=>{
+    const stats={};
+    players.forEach(p=>{
+      const patrol=playerPatrols[p.id];
+      const status=unitStatus[p.id]||{};
+      const units=patrol?.units||[];
+      let totalFigs=0,deployedFigs=0,eliminatedFigs=0,pendingFigs=0;
+      units.forEach(u=>{
+        const st=status[u.id]||{deployed:0,eliminated:0,total:u.count||1};
+        totalFigs+=st.total;
+        deployedFigs+=st.deployed;
+        eliminatedFigs+=st.eliminated;
+        pendingFigs+=(st.total-st.deployed-st.eliminated);
+      });
+      stats[p.id]={
+        total:totalFigs,
+        deployed:deployedFigs,
+        eliminated:eliminatedFigs,
+        pending:pendingFigs,
+        units:units.length,
+      };
+    });
+    return stats;
+  },[players,playerPatrols,unitStatus]);
+
+  const processPDF=async(file)=>{
+    if(!apiKey){setPdfStatus({type:"error",msg:"Introduce tu API key en CONFIG."});return;}
+    setPdfLoading(true);setPdfStatus({type:"info",msg:`Procesando: ${file.name}...`});
+    try{
+      const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=()=>rej(new Error("Error leyendo archivo"));r.readAsDataURL(file);});
+      const prompt=`Analiza este PDF de Combat Patrol de Warhammer 40,000 y extrae los datos en formato JSON.\n\nEstructura requerida:\n{\n  "id": "string_sin_espacios",\n  "system": "wh40k",\n  "game_mode": "combat_patrol",\n  "faction": "Nombre Facción",\n  "faction_keyword": "Keyword",\n  "patrol_name": "Nombre",\n  "faction_ability": {"name":"...","description":"..."},\n  "enhancements": {"default":{"name":"...","description":"..."},"optional":{"name":"...","description":"..."}},\n  "secondary_objectives": {"default":{"name":"...","description":"..."},"optional":{"name":"...","description":"..."}},\n  "stratagems": [{"name":"...","cost_cp":1,"when":"...","effect":"..."}],\n  "units": [{"id":"string_id","name":"...","role":"warlord|battleline|troops|elite|fast_attack|heavy_support|support","count":1,"keywords":[],"stats":{"M":"6\\"","T":4,"SV":"3+","W":2,"LD":"6+","OC":1},"invulnerable_save":null,"base_size_mm":32,"base_type":"round|oval","ranged_weapons":[{"name":"...","keywords":[],"range_inches":24,"attacks":2,"skill":"3+","strength":4,"AP":0,"damage":1}],"melee_weapons":[{"name":"...","keywords":[],"range_inches":0,"attacks":3,"skill":"3+","strength":4,"AP":0,"damage":1}],"abilities":[{"name":"...","type":"core|faction|special","description":"...","aura":null}]}]\n}\n\nPara el campo aura: inclúyelo solo si la habilidad tiene efecto de área visible en tablero. Formato: {"type":"buff|synapse|denial|debuff","radius_inches":6,"affects":"unit","display_text":"Texto corto","color":"#hex"}. Color sugerido: buff=#fbbf24, synapse=#a855f7, denial=#f43f5e.\nResponde SOLO con JSON válido, sin markdown.`;
+      const response=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[{type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},{type:"text",text:prompt}]}]})});
+      if(!response.ok){const e=await response.json();throw new Error(e.error?.message||`HTTP ${response.status}`);}
+      const data=await response.json();
+      const raw=data.content.map(c=>c.text||"").join("").trim();
+      const clean=raw.replace(/^```json?\s*/,"").replace(/```\s*$/,"").trim();
+      const parsed=JSON.parse(clean);
+      if(!parsed.units||!Array.isArray(parsed.units))throw new Error("Falta campo 'units'");
+      const exists=patrols.find(p=>p.id===parsed.id);
+      if(exists)setPatrols(prev=>prev.map(p=>p.id===parsed.id?parsed:p));
+      else setPatrols(prev=>[...prev,parsed]);
+      setPdfStatus({type:"success",msg:`✓ ${parsed.patrol_name} importada (${parsed.units.length} unidades)`});
+    }catch(err){setPdfStatus({type:"error",msg:`Error: ${err.message}`});}
+    finally{setPdfLoading(false);}
+  };
+
+  const handleFileInput=(e)=>{const f=e.target.files[0];if(f&&f.type==="application/pdf")processPDF(f);};
+  const handleDrop=(e)=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f&&f.type==="application/pdf")processPDF(f);};
+
+  const unassigned=minis.filter(m=>!m.playerId).length;
+
+  return(
+    <div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Rajdhani',monospace",color:C.text}}>
+
+      {/* ── MODO FULLSCREEN ── solo el canvas, sin UI */}
+      {fullscreen&&(
+        <div style={{position:"fixed",inset:0,background:"#000",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <canvas ref={canvasRef}
+            onClick={handleCanvasClick}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onWheel={handleWheel}
+            style={{width:"100vw",height:"100vh",objectFit:"contain",cursor:"crosshair"}}/>
+          {/* Botón salir — pequeño, esquina, desaparece al cabo de 3s con hover */}
+          <button onClick={()=>setFullscreen(false)}
+            style={{position:"fixed",bottom:16,right:16,padding:"6px 12px",
+              background:"rgba(5,13,26,0.7)",border:`1px solid ${C.border}`,
+              borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",
+              fontSize:11,letterSpacing:1,opacity:0.4,transition:"opacity .3s",zIndex:10000}}
+            onMouseEnter={e=>e.currentTarget.style.opacity=1}
+            onMouseLeave={e=>e.currentTarget.style.opacity=0.4}>
+            ESC / SALIR
+          </button>
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`,padding:"8px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"relative"}}>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:"1px",background:`linear-gradient(90deg,transparent,${C.accent},transparent)`,opacity:.4}}/>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:C.accent,boxShadow:`0 0 7px ${C.accent}`}} className="pulse"/>
+          <span style={{fontWeight:700,fontSize:15,letterSpacing:3,color:C.accent}}>WARGAME</span>
+          <span style={{fontWeight:400,fontSize:15,letterSpacing:3,color:C.text}}>VISION SYS</span>
+          <span style={{color:C.muted,fontSize:11,letterSpacing:1}}>// v3.0</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{display:"flex",gap:4}}>
+            {Object.entries(GAME_SYSTEMS).map(([key,sys])=>(
+              <button key={key} onClick={()=>changeSystem(key)} className={`rb ${activeSystem===key?"bon":""}`}
+                style={{padding:"3px 9px",fontSize:12,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
+                {sys.short}
+              </button>
+            ))}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:C.muted,letterSpacing:1}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block",boxShadow:`0 0 6px ${C.green}`}}/>
+            PROTOTIPO
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.panel}}>
+        {TABS.map((t,i)=>(
+          <button key={t} className={`rb ${tab===t?"on":""}`} onClick={()=>setTab(t)}
+            style={{padding:"9px 18px",borderRadius:0,fontSize:11,letterSpacing:2,borderLeft:i>0?`1px solid ${C.border}`:"none",borderTop:"none",borderRight:"none",borderBottom:tab===t?`2px solid ${C.accent}`:"2px solid transparent"}}>
+            {t}
+            {t==="JUEGO"&&Object.keys(playerPatrols).length>0&&(
+              <span style={{marginLeft:5,fontSize:11,color:C.green,background:"rgba(34,197,94,.1)",padding:"1px 5px",borderRadius:2}}>{Object.keys(playerPatrols).length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ TABLERO ══ */}
+      {tab==="TABLERO"&&(
+        <div style={{padding:14,display:"flex",gap:14,height:"calc(100vh - 110px)",overflow:"hidden"}}>
+          <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+            <div style={{marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              {[{key:"move",label:"M"},{key:"charge",label:"C"},{key:"shoot",label:"AD"},{key:"abilities",label:"HAB"},{key:"engage",label:"ER",defaultColor:C.red}].map(({key,label,defaultColor})=>{
+                const color=key==="engage"?(auraColors.engage||defaultColor):auraColors[key]||C.green;
+                const [r,g,b]=h2p(color);
+                return(<button key={key} onClick={()=>setActiveAuras(prev=>({...prev,[key]:!prev[key]}))}
+                  style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:2,cursor:"pointer",border:`1px solid ${activeAuras[key]?color:C.border}`,background:activeAuras[key]?`rgba(${r},${g},${b},.1)`:"transparent",color:activeAuras[key]?color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
+                  <div style={{width:5,height:5,borderRadius:"50%",background:activeAuras[key]?color:C.muted}}/>{label}
+                </button>);
+              })}
+              <button onClick={()=>setShowLegend(true)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:C.blue,color:C.blue}}>? ÍNDICE</button>
+              {/* Botón fullscreen */}
+              <button onClick={()=>setFullscreen(true)} className="rb"
+                style={{padding:"3px 8px",fontSize:13,marginLeft:"auto",borderColor:C.border,color:C.muted}}
+                title="Pantalla completa (Esc para salir)">⛶</button>
+              {/* Toggle global auras */}
+              <button onClick={()=>{
+                const anyOn=Object.values(activeAuras).some(Boolean);
+                if(anyOn){prevAuras.current={...activeAuras};setActiveAuras({move:false,charge:false,shoot:false,abilities:false});}
+                else setActiveAuras({...prevAuras.current});
+              }} className="rb" style={{padding:"3px 10px",fontSize:11,
+                borderColor:Object.values(activeAuras).some(Boolean)?"#f43f5e44":C.green,
+                color:Object.values(activeAuras).some(Boolean)?"#f43f5e":C.green,
+                background:Object.values(activeAuras).some(Boolean)?"rgba(244,63,94,0.05)":"rgba(34,197,94,0.05)"}}>
+                {Object.values(activeAuras).some(Boolean)?"◉ OCULTAR":"○ AURAS"}
+              </button>
+              {/* Toggle modo relleno / solo borde */}
+              <button onClick={()=>setAuraFillMode(m=>m==="fill"?"border":"fill")}
+                className="rb" style={{padding:"3px 10px",fontSize:11,
+                  borderColor:auraFillMode==="border"?C.yellow:C.border,
+                  color:auraFillMode==="border"?C.yellow:C.muted,
+                  background:auraFillMode==="border"?"rgba(251,191,36,0.06)":"transparent"}}>
+                {auraFillMode==="border"?"◻ CONTORNO":"◼ RELLENO"}
+              </button>
+              <div style={{position:"relative"}} onClick={e=>e.stopPropagation()}>
+                <button onClick={()=>setShowDeployMenu(v=>!v)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:activeZone?C.green:C.border,color:activeZone?C.green:C.muted,background:activeZone?"rgba(34,197,94,.1)":"transparent"}}>
+                  ⬡ DESPLIEGUE{activeZone?` — ${DEPLOY_ZONES[activeZone].label}`:""}
+                </button>
+                {showDeployMenu&&(
+                  <div style={{position:"absolute",top:"110%",left:0,zIndex:20,background:C.panel,border:`1px solid ${C.border}`,borderRadius:2,padding:8,minWidth:240,boxShadow:"0 0 20px rgba(0,0,0,0.5)"}}>
+                    <div style={{fontSize:12,color:C.muted,letterSpacing:2,marginBottom:8}}>ZONA DE DESPLIEGUE</div>
+                    {Object.entries(DEPLOY_ZONES).map(([key,{label,desc}])=>(
+                      <button key={key} onClick={()=>{setActiveZone(activeZone===key?null:key);setShowDeployMenu(false);}}
+                        style={{display:"block",width:"100%",textAlign:"left",padding:"6px 8px",background:activeZone===key?"rgba(34,197,94,.12)":"transparent",border:"none",borderRadius:2,cursor:"pointer",marginBottom:2,color:activeZone===key?C.green:C.text,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>
+                        <div>{label}</div><div style={{fontSize:12,color:C.muted,fontWeight:400}}>{desc}</div>
+                      </button>
+                    ))}
+                    {activeZone&&<button onClick={()=>{setActiveZone(null);setShowDeployMenu(false);}} style={{display:"block",width:"100%",padding:"5px 8px",marginTop:4,background:"transparent",border:`1px solid ${C.red}`,borderRadius:2,cursor:"pointer",color:C.red,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>✕ OCULTAR ZONA</button>}
+                  </div>
+                )}
+              </div>
+              {unassigned>0&&<span className="tag pulse" style={{marginLeft:"auto",background:"rgba(249,115,22,.1)",color:C.accent,border:"1px solid #7c3100"}}>⚠ {unassigned} SIN ASIGNAR</span>}
+            </div>
+            {/* Etiqueta de tamaño del tablero */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+              marginBottom:4,padding:"3px 6px",background:"rgba(7,15,32,0.8)",
+              borderRadius:2,border:`1px solid ${C.border}`}}>
+              <span style={{fontSize:11,color:C.muted,letterSpacing:1,fontFamily:"'Share Tech Mono',monospace"}}>
+                {modeInfo.w}" × {modeInfo.h}"
+                <span style={{color:C.border,margin:"0 6px"}}>·</span>
+                <span style={{color:C.muted}}>{(modeInfo.w*2.54).toFixed(0)}cm × {(modeInfo.h*2.54).toFixed(0)}cm</span>
+              </span>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {zoom!==1&&<>
+                  <span style={{fontSize:11,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>
+                    {Math.round(zoom*100)}%
+                  </span>
+                  <button onClick={resetZoom} className="rb" style={{padding:"1px 7px",fontSize:11}}>↺</button>
+                </>}
+              </div>
+            </div>
+            {/* Canvas — aspect ratio 44:30 del tablero de Combat Patrol */}
+            <div style={{position:"relative",overflow:"hidden",borderRadius:2,
+              border:`1px solid ${C.border}`,flex:"0 0 auto",width:"100%"}}>
+              <canvas ref={canvasRef} width={700} height={520}
+                onClick={handleCanvasClick}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onWheel={handleWheel}
+                style={{display:"block",width:"100%",height:"auto",
+                  aspectRatio:"700/520",maxHeight:"calc(100vh - 180px)",
+                  cursor:isDraggingGroup.current?"grabbing":isDraggingMini.current?"grabbing":selMinis.size>0?"grab":selMini?"crosshair":isPanning.current?"grabbing":"crosshair"}}/>
+              {assignMenu&&(
+                <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
+                  <div style={{fontSize:12,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
+                  {players.map(p=>(
+                    <button key={p.id} onClick={()=>{setMinis(prev=>prev.map(m=>m.id===assignMenu.miniId?{...m,playerId:p.id}:m));setAssignMenu(null);setSelMini(null);}}
+                      style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"5px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.text,fontSize:12,fontFamily:"'Rajdhani',monospace",fontWeight:600,letterSpacing:1}}
+                      onMouseEnter={e=>e.currentTarget.style.background="rgba(249,115,22,0.18)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>{p.name}
+                    </button>
+                  ))}
+                  <div style={{borderTop:`1px solid ${C.border}`,margin:"3px 0"}}/>
+                  <button onClick={()=>removeMiniById(assignMenu.miniId)} style={{width:"100%",padding:"4px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.red,fontSize:11,fontFamily:"'Rajdhani',monospace",letterSpacing:1,textAlign:"left"}}>✕ ELIMINAR DEL TABLERO</button>
+                </div>
+              )}
+            </div>
+            <div style={{marginTop:8,display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
+              {players.map(p=>{const s=gameStats[p.id]||{};return(
+                <div key={p.id} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,letterSpacing:1}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>
+                  <span style={{color:p.color,fontWeight:600}}>{p.name}</span>
+                  <span style={{color:C.muted}}>{s.deployed||0} en juego{s.eliminated>0?` · ${s.eliminated} bajas`:""}{s.pending>0?` · ${s.pending} pend.`:""}</span>
+                </div>
+              );})}
+              {minis.length===0&&<span style={{fontSize:12,color:C.muted}}>Ve a JUEGO para seleccionar patrullas y desplegar unidades</span>}
+            </div>
+          </div>
+          <div style={{width:190,flexShrink:0}}>
+            <div className="panel" style={{borderRadius:2,padding:10,marginBottom:8}}>
+              <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:6}}>MODO ACTIVO</div>
+              <div style={{fontSize:11,fontWeight:700,color:sysInfo.color,letterSpacing:1}}>{sysInfo.short}</div>
+              <div style={{fontSize:12,color:C.text}}>{modeInfo.label}</div>
+              <div style={{fontSize:11,color:C.muted,marginTop:2}}>{modeInfo.w}" × {modeInfo.h}"</div>
+            </div>
+            {players.map(p=>{const patrol=playerPatrols[p.id];const s=gameStats[p.id]||{};const fc=patrol?(FACTION_COLORS[patrol.faction_keyword]||C.blue):C.muted;return(
+              <div key={p.id} className="panel" style={{borderRadius:2,padding:10,marginBottom:6,borderLeft:`2px solid ${p.color}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:5}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:p.color}}/>
+                  <span style={{fontSize:11,fontWeight:700,color:p.color,letterSpacing:1}}>{p.name}</span>
+                </div>
+                {patrol?(
+                  <>
+                    <div style={{fontSize:12,color:fc,marginBottom:4}}>{patrol.patrol_name}</div>
+                    <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                      {s.deployed>0&&<span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:11}}>{s.deployed} en juego</span>}
+                      {s.pending>0&&<span className="tag" style={{color:C.muted,background:C.bg,fontSize:11}}>{s.pending} pend.</span>}
+                      {s.eliminated>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:11}}>{s.eliminated} bajas</span>}
+                    </div>
+                  </>
+                ):<div style={{fontSize:12,color:C.muted}}>Sin patrulla.</div>}
+              </div>
+            );})}
+          </div>
+        </div>
+      )}
+
+      {/* ══ JUGADORES ══ */}
+      {tab==="JUGADORES"&&(
+        <div style={{padding:16,maxWidth:440}}>
+          <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:14}}>// REGISTRO DE JUGADORES</div>
+          {players.map(p=>(
+            <div key={p.id} className="panel" style={{borderRadius:2,padding:12,marginBottom:8,
+              display:"flex",alignItems:"center",gap:12,borderLeft:`3px solid ${p.color}`}}>
+              {/* Selector de color — click en el círculo abre el color picker */}
+              <div style={{position:"relative",flexShrink:0}}>
+                <div style={{width:24,height:24,borderRadius:"50%",background:p.color,
+                  boxShadow:`0 0 10px ${p.color}`,cursor:"pointer",
+                  border:"2px solid rgba(255,255,255,0.15)"}}
+                  onClick={()=>document.getElementById(`cp_${p.id}`).click()}/>
+                <input id={`cp_${p.id}`} type="color" value={p.color}
+                  onChange={e=>setPlayers(prev=>prev.map(x=>x.id===p.id?{...x,color:e.target.value}:x))}
+                  style={{position:"absolute",opacity:0,width:0,height:0,top:0,left:0}}/>
+              </div>
+              <span style={{flex:1,fontWeight:700,letterSpacing:1,color:p.color,fontSize:15}}>{p.name}</span>
+              <span className="tag" style={{color:p.color,background:`rgba(${h2rgb(p.color)},.1)`,fontSize:12}}>
+                {minis.filter(m=>m.playerId===p.id).length} MINIS
+              </span>
+              <button onClick={()=>setPlayers(prev=>prev.filter(x=>x.id!==p.id))}
+                className="rb" style={{padding:"3px 9px",fontSize:12}}>✕</button>
+            </div>
+          ))}
+          <button onClick={()=>setPlayers(prev=>{
+            const id=Math.max(0,...prev.map(p=>p.id))+1;
+            return[...prev,{id,name:`JUGADOR ${["I","II","III","IV","V","VI"][id-1]||id}`,
+              color:PLAYER_COLORS[(id-1)%PLAYER_COLORS.length]}];
+          })} className="rb" style={{width:"100%",padding:"10px",fontSize:12,letterSpacing:2,marginTop:4}}>
+            + AÑADIR JUGADOR
+          </button>
+        </div>
+      )}
+
+      {/* ══ JUEGO ══ */}
+      {tab==="JUEGO"&&(
+        <div style={{padding:14}}>
+          {/* Sistema + Modo */}
+          <div className="panel" style={{borderRadius:2,padding:12,marginBottom:12}}>
+            <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
+              <div>
+                <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:6}}>SISTEMA DE JUEGO</div>
+                <div style={{display:"flex",gap:4}}>
+                  {Object.entries(GAME_SYSTEMS).map(([key,sys])=>(
+                    <button key={key} onClick={()=>changeSystem(key)} className={`rb ${activeSystem===key?"bon":""}`}
+                      style={{padding:"5px 12px",fontSize:11,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
+                      {sys.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:6}}>MODO DE JUEGO</div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {Object.entries(sysInfo.modes).map(([key,m])=>(
+                    <button key={key} onClick={()=>changeMode(key)} className={`rb ${activeMode===key?"on":""}`} style={{padding:"5px 12px",fontSize:11,letterSpacing:1}}>{m.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{marginLeft:"auto",textAlign:"right"}}>
+                <div style={{fontSize:12,color:C.muted,marginBottom:2}}>TABLERO</div>
+                <div style={{fontSize:14,fontWeight:700,color:sysInfo.color}}>{modeInfo.w}" × {modeInfo.h}"</div>
+                <div style={{fontSize:12,color:C.muted}}>{modeInfo.maxRounds} rondas</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Selectores de patrulla */}
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${players.length},1fr)`,gap:10,marginBottom:14}}>
+            {players.map(p=>(
+              <PatrolSelector key={p.id} playerId={p.id} playerColor={p.color} playerName={p.name}
+                patrol={playerPatrols[p.id]} patrols={patrols} system={activeSystem} mode={activeMode}
+                onSelectPatrol={(patrol)=>selectPatrol(p.id,patrol)}/>
+            ))}
+          </div>
+
+          {/* Listas de unidades */}
+          {Object.keys(playerPatrols).length>0&&(
+            <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(players.filter(p=>playerPatrols[p.id]).length,2)},1fr)`,gap:10}}>
+              {players.filter(p=>playerPatrols[p.id]).map(p=>{
+                const patrol=playerPatrols[p.id];
+                const status=unitStatus[p.id]||{};
+                const fc=FACTION_COLORS[patrol.faction_keyword]||C.blue;
+                const stats=gameStats[p.id]||{};
+                return(
+                  <div key={p.id}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 10px",background:C.panel,borderRadius:2,borderLeft:`3px solid ${p.color}`}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:12,fontWeight:700,color:p.color,letterSpacing:1}}>{p.name}</div>
+                        <div style={{fontSize:11,color:fc}}>{patrol.patrol_name}</div>
+                      </div>
+                      <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                        <span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:11}}>{stats.deployed||0} en juego</span>
+                        <span className="tag" style={{color:C.muted,background:C.bg,fontSize:11}}>{stats.pending||0} pend.</span>
+                        {(stats.eliminated||0)>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:11}}>{stats.eliminated} bajas</span>}
+                      </div>
+                    </div>
+                    {patrol.faction_ability&&(
+                      <div style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:6,borderLeft:`2px solid ${fc}44`,fontSize:12,color:C.muted}}>
+                        <span style={{color:fc,fontWeight:700,marginRight:5}}>{patrol.faction_ability.name}</span>
+                        {patrol.faction_ability.description}
+                      </div>
+                    )}
+                    <div>
+                      {(patrol.units||[]).map(unit=>{
+                        const unitSt=status[unit.id]||{deployed:0,eliminated:0,total:unit.count||1};
+                        const isSel=selUnit?.playerId===p.id&&selUnit?.unitId===unit.id;
+                        // Mini más reciente de esta unidad para eliminar
+                        const lastMini=minis.filter(m=>m.playerId===p.id&&m.unitData?.id===unit.id).slice(-1)[0];
+                        return(
+                          <UnitRow key={unit.id} unit={{...unit,faction_keyword:patrol.faction_keyword}}
+                            unitSt={unitSt} playerColor={p.color} selected={isSel}
+                            onClick={()=>setSelUnit(isSel?null:{playerId:p.id,unitId:unit.id})}
+                            onDeploy={()=>deployUnit(p.id,unit,patrol)}
+                            onDeployAll={()=>deployAllUnit(p.id,unit,patrol)}
+                            onEliminate={()=>lastMini&&eliminateUnit(p.id,unit.id,lastMini.id)}/>
+                        );
+                      })}
+                    </div>
+                    {patrol.stratagems?.length>0&&(
+                      <div style={{marginTop:8}}>
+                        <div style={{fontSize:12,color:C.muted,letterSpacing:2,marginBottom:5}}>ESTRATAGEMAS</div>
+                        {patrol.stratagems.map(s=>(
+                          <div key={s.name} style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:3,borderLeft:"2px solid #38bdf844"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+                              <span style={{fontSize:12,fontWeight:700,color:C.blue}}>{s.name}</span>
+                              <span className="tag" style={{color:C.blue,background:"rgba(56,189,248,.1)",fontSize:8}}>{s.cost_cp}CP</span>
+                            </div>
+                            <div style={{fontSize:11,color:C.muted,lineHeight:1.3}}>{s.effect}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {Object.keys(playerPatrols).length===0&&(
+            <div style={{padding:"40px 20px",textAlign:"center",color:C.muted,fontSize:11,letterSpacing:1}}>
+              Selecciona un modo de juego y elige la patrulla de cada jugador para comenzar
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ CONFIG ══ */}
+      {tab==="CONFIG"&&(
+        <div style={{padding:14,maxWidth:560}}>
+          <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:14}}>// CONFIGURACIÓN</div>
+          {/* Calibración de cámara */}
+          <CameraCalibration/>
+          {/* Panel colores de auras */}
+          <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+            <div style={{color:C.accent,fontSize:12,letterSpacing:2,marginBottom:10}}>COLORES DE AURAS</div>
+            {[
+              {key:"move",    label:"Movimiento (M)"},
+              {key:"charge",  label:"Carga (C)"},
+              {key:"shoot",   label:"Disparo (AD)"},
+              {key:"abilities",label:"Habilidades (HAB)"},
+              {key:"engage",  label:"Engagement Range (ER)"},
+            ].map(({key,label})=>(
+              <div key={key} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <div style={{position:"relative",flexShrink:0}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:auraColors[key],
+                    boxShadow:`0 0 8px ${auraColors[key]}`,cursor:"pointer",
+                    border:"2px solid rgba(255,255,255,0.15)"}}
+                    onClick={()=>document.getElementById(`aura_${key}`).click()}/>
+                  <input id={`aura_${key}`} type="color" value={auraColors[key]}
+                    onChange={e=>setAuraColors(prev=>({...prev,[key]:e.target.value}))}
+                    style={{position:"absolute",opacity:0,width:0,height:0,top:0,left:0}}/>
+                </div>
+                <span style={{flex:1,fontSize:13,color:auraColors[key],fontWeight:700,letterSpacing:1}}>{label}</span>
+                <span style={{fontSize:11,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>{auraColors[key]}</span>
+                <button onClick={()=>{
+                  const defaults={move:"#22c55e",charge:"#a855f7",shoot:"#38bdf8",abilities:"#fbbf24",engage:"#f43f5e"};
+                  setAuraColors(prev=>({...prev,[key]:defaults[key]}));
+                }} className="rb" style={{padding:"2px 7px",fontSize:12}}>↺</button>
+              </div>
+            ))}
+          </div>
+          <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>ANTHROPIC API KEY</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:8,lineHeight:1.4}}>Necesaria para importar Combat Patrols desde PDF. Solo se guarda en memoria.</div>
+            <div style={{display:"flex",gap:6}}>
+              <input type={showApiKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..."
+                style={{flex:1,background:C.bg,border:`1px solid ${apiKey?C.green:C.border}`,borderRadius:2,padding:"6px 10px",color:C.text,fontFamily:"'Share Tech Mono',monospace",fontSize:12,outline:"none"}}/>
+              <button className="rb" onClick={()=>setShowApiKey(v=>!v)} style={{padding:"6px 10px",fontSize:11}}>{showApiKey?"OCULTAR":"VER"}</button>
+            </div>
+            {apiKey&&<div style={{marginTop:5,fontSize:12,color:C.green}}>✓ API key configurada</div>}
+          </div>
+          <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>IMPORTAR COMBAT PATROL (PDF)</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.4}}>Sube el PDF oficial de una Combat Patrol. Claude extraerá automáticamente unidades, armas, habilidades y estratagemas.</div>
+            <div className={`drop-zone ${dragOver?"drag-over":""}`} onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} onDrop={handleDrop} onClick={()=>fileRef.current?.click()}>
+              {pdfLoading?(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}><div className="spin" style={{fontSize:22}}>⟳</div><div style={{fontSize:11,color:C.blue}}>Procesando con Claude...</div></div>):(<div><div style={{fontSize:18,marginBottom:5}}>📄</div><div style={{fontSize:11,color:C.muted}}>Arrastra un PDF o haz clic para seleccionar</div></div>)}
+            </div>
+            <input ref={fileRef} type="file" accept="application/pdf" onChange={handleFileInput}/>
+            {pdfStatus&&(<div style={{marginTop:8,padding:"7px 10px",borderRadius:2,fontSize:11,background:pdfStatus.type==="error"?"rgba(244,63,94,.1)":pdfStatus.type==="success"?"rgba(34,197,94,.1)":"rgba(56,189,248,.1)",border:`1px solid ${pdfStatus.type==="error"?C.red:pdfStatus.type==="success"?C.green:C.blue}`,color:pdfStatus.type==="error"?C.red:pdfStatus.type==="success"?C.green:C.blue}}>{pdfStatus.msg}</div>)}
+          </div>
+          <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>PROYECCIÓN — IMÁGENES PERSONALIZADAS</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.4}}>
+              Proyecta logos, emblemas o cualquier imagen sobre el tablero. Útil para logos de tienda, emblemas de facción o marcadores personalizados.
+            </div>
+            <OverlayManager overlays={overlays} setOverlays={setOverlays} players={players}/>
+          </div>
+          <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
+            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>MARCADORES ARUCO — CALIBRACIÓN DE CÁMARA</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.4}}>Genera marcadores ArUco temáticos por facción para las 4 esquinas del tablero. La cámara cenital los detecta automáticamente para calibrar posición y escala en tiempo real.</div>
+            <ArucoGenerator/>
+          </div>
+          <div className="panel" style={{borderRadius:2,padding:14}}>
+            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>PATRULLAS DISPONIBLES ({patrols.length})</div>
+            {patrols.map(p=>{const fc=FACTION_COLORS[p.faction_keyword]||C.blue;return(
+              <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:C.bg,borderRadius:2,marginBottom:3,borderLeft:`2px solid ${fc}`}}>
+                <div style={{width:5,height:5,borderRadius:"50%",background:fc,flexShrink:0}}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,color:C.text,fontWeight:700}}>{p.patrol_name}</div>
+                  <div style={{fontSize:11,color:C.muted}}>{p.faction} · {p.system} · {p.game_mode}</div>
+                </div>
+                <span style={{fontSize:11,color:fc}}>{p.units?.length||0} uds</span>
+                {!EMBEDDED_PATROLS.find(e=>e.id===p.id)&&(<button onClick={()=>setPatrols(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"1px 6px",fontSize:12,color:C.red,borderColor:C.red}}>✕</button>)}
+              </div>
+            );})}
+          </div>
+        </div>
+      )}
+
+      {/* Leyenda */}
+      {showLegend&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(5,13,26,.9)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50}} onClick={()=>setShowLegend(false)}>
+          <div className="panel fade-in" style={{borderRadius:4,padding:22,width:360,borderColor:C.blue}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <span style={{color:C.blue,fontWeight:700,letterSpacing:2,fontSize:13}}>// ÍNDICE DE AURAS</span>
+              <button onClick={()=>setShowLegend(false)} className="rb" style={{padding:"2px 8px",fontSize:12}}>✕</button>
+            </div>
+            {[
+              {key:"move",    label:"M — MOVIMIENTO",   desc:'Radio de movimiento en pulgadas.'},
+              {key:"charge",  label:"C — CARGA",         desc:'Alcance de carga estimado (M + 7" media de 2D6).'},
+              {key:"shoot",   label:"AD — ARMA DIST.",   desc:'Alcance del arma de mayor rango.'},
+              {key:"abilities",label:"HAB — HABILIDADES",desc:'Auras de habilidades (Sinapsis, Fortune, Omni-scramblers…)'},
+              {key:"engage",  label:"ER — ENGAGEMENT",   desc:'Zona de combate cuerpo a cuerpo (1" desde el borde de la peana).'},
+            ].map(({key,label,desc})=>{
+              const color=auraColors[key]||C.green;
+              return(
+              <div key={key} style={{marginBottom:8,padding:10,background:C.bg,borderRadius:2,borderLeft:`3px solid ${color}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:color}}/>
+                  <span style={{fontWeight:700,fontSize:12,color,letterSpacing:1}}>{label}</span>
+                </div>
+                <p style={{fontSize:12,color:C.muted,lineHeight:1.4}}>{desc}</p>
+              </div>
+              );
+            })}
+            <div style={{fontSize:12,color:C.muted,textAlign:"center",marginTop:6}}>CLIC FUERA PARA CERRAR</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ErrorBoundary><App/></ErrorBoundary>
+);
+</script>
+</body>
+</html>
