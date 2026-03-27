@@ -1229,23 +1229,14 @@ function App(){
   useEffect(()=>{
     if(tab!=="TABLERO")return;
     const canvas=canvasRef.current;if(!canvas)return;
-    // Resolución del canvas: usar el tamaño CSS real × devicePixelRatio para máxima nitidez
     const dpr=window.devicePixelRatio||1;
     const logicalW=700,logicalH=520;
-    const cssW=canvas.clientWidth||logicalW;
-    const cssH=canvas.clientHeight||logicalH;
-    const physW=Math.round(cssW*dpr);
-    const physH=Math.round(cssH*dpr);
-    // Solo redimensionar si cambió (evita recalcular en cada tick)
-    if(canvas.width!==physW||canvas.height!==physH){
-      canvas.width=physW;
-      canvas.height=physH;
+    if(canvas.width!==logicalW*dpr||canvas.height!==logicalH*dpr){
+      canvas.width=logicalW*dpr;
+      canvas.height=logicalH*dpr;
     }
     const ctx=canvas.getContext("2d");
-    // Escalar para que el espacio lógico sea siempre 700×520
-    const scaleX=physW/logicalW;
-    const scaleY=physH/logicalH;
-    ctx.setTransform(scaleX,0,0,scaleY,0,0);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
     const W=logicalW,H=logicalH,t=tick*0.02,BW=modeInfo.w,BH=modeInfo.h;
     ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
     // Aplicar zoom y pan
@@ -1591,9 +1582,9 @@ function App(){
                 </>}
               </div>
             </div>
-            {/* Canvas — cabe en el contenedor respetando aspect ratio 700:520 */}
+            {/* Canvas — mantiene aspect ratio 700:520 del tablero */}
             <div style={{position:"relative",overflow:"hidden",borderRadius:2,
-              border:`1px solid ${C.border}`,flex:1,minHeight:0}}>
+              border:`1px solid ${C.border}`,flex:"0 0 auto"}}>
               <canvas ref={canvasRef} width={700} height={520}
                 onClick={handleCanvasClick}
                 onMouseDown={handleMouseDown}
@@ -1601,7 +1592,7 @@ function App(){
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
                 onWheel={handleWheel}
-                style={{display:"block",width:"100%",height:"100%",
+                style={{display:"block",width:"100%",height:"auto",
                   cursor:isDraggingMini.current?"grabbing":selMini?"crosshair":isPanning.current?"grabbing":"grab"}}/>
               {assignMenu&&(
                 <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
