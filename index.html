@@ -1262,9 +1262,25 @@ function CameraCalibration(){
   });
 
   // Arrancar cámara
+  const [cameras,setCameras]=useState([]);
+  const [selCamId,setSelCamId]=useState('');
+
+  // Enumerar cámaras disponibles
+  useEffect(()=>{
+    navigator.mediaDevices?.enumerateDevices().then(devs=>{
+      const cams=devs.filter(d=>d.kind==='videoinput');
+      setCameras(cams);
+      if(cams.length>0&&!selCamId)setSelCamId(cams[0].deviceId);
+    }).catch(()=>{});
+  },[]);
+
   const startCamera=async()=>{
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+      // Intentar con el dispositivo seleccionado, o fallback sin restricciones
+      const constraints=selCamId
+        ?{video:{deviceId:{exact:selCamId},width:{ideal:1280},height:{ideal:720}}}
+        :{video:{width:{ideal:1280},height:{ideal:720}}};
+      const stream=await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current=stream;
       if(videoRef.current){videoRef.current.srcObject=stream;videoRef.current.play();}
       setActive(true);setPoints([]);setCalibrated(false);
@@ -1383,15 +1399,32 @@ function CameraCalibration(){
       )}
 
       {!active&&(
-        <button onClick={startCamera}
-          style={{width:"100%",padding:"9px",background:"transparent",
-            border:`1px solid ${C.blue}`,borderRadius:2,cursor:"pointer",
-            color:C.blue,fontFamily:"'Rajdhani',monospace",fontSize:11,
-            fontWeight:700,letterSpacing:2,transition:"all .2s"}}
-          onMouseEnter={e=>e.currentTarget.style.background="rgba(56,189,248,.08)"}
-          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-          {savedCalib?"↺ RECALIBRAR CÁMARA":"⊙ INICIAR CALIBRACIÓN"}
-        </button>
+        <div>
+          {/* Selector de cámara si hay más de una */}
+          {cameras.length>1&&(
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:11,color:C.muted,letterSpacing:1,marginBottom:5}}>CÁMARA</div>
+              <select value={selCamId} onChange={e=>setSelCamId(e.target.value)}
+                style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,
+                  color:C.text,fontFamily:"'Rajdhani',monospace",fontSize:12,padding:"5px 8px",cursor:"pointer"}}>
+                {cameras.map(c=>(
+                  <option key={c.deviceId} value={c.deviceId}>
+                    {c.label||`Cámara ${cameras.indexOf(c)+1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button onClick={startCamera}
+            style={{width:"100%",padding:"9px",background:"transparent",
+              border:`1px solid ${C.blue}`,borderRadius:2,cursor:"pointer",
+              color:C.blue,fontFamily:"'Rajdhani',monospace",fontSize:11,
+              fontWeight:700,letterSpacing:2,transition:"all .2s"}}
+            onMouseEnter={e=>e.currentTarget.style.background="rgba(56,189,248,.08)"}
+            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            {savedCalib?"↺ RECALIBRAR CÁMARA":"⊙ INICIAR CALIBRACIÓN"}
+          </button>
+        </div>
       )}
 
       {/* Info técnica de la calibración guardada */}
