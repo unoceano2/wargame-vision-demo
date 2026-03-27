@@ -1294,17 +1294,23 @@ function CameraCalibration(){
 
   useEffect(()=>()=>streamRef.current?.getTracks().forEach(t=>t.stop()),[]);
 
-  // Dibujar frame + puntos sobre el canvas
+  // Ref para los puntos — el loop los lee sin re-montarse al cambiar estado
+  const pointsRef=useRef([]);
+  useEffect(()=>{pointsRef.current=points;},[points]);
+
+  // Loop de animación — solo depende de active, nunca se interrumpe al marcar puntos
   useEffect(()=>{
     if(!active)return;
     let raf;
     const draw=()=>{
-      const v=videoRef.current,c=canvasRef.current;if(!v||!c)return;
+      const v=videoRef.current,c=canvasRef.current;if(!v||!c){raf=requestAnimationFrame(draw);return;}
       const ctx=c.getContext('2d');
-      c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+      // Solo redimensionar si el video ya tiene dimensiones
+      if(v.videoWidth>0){c.width=v.videoWidth;c.height=v.videoHeight;}
       ctx.drawImage(v,0,0);
-      // Puntos marcados
-      points.forEach((p,i)=>{
+      // Leer puntos desde ref (sin depender del estado)
+      const pts=pointsRef.current;
+      pts.forEach((p,i)=>{
         ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);
         ctx.fillStyle='#f97316';ctx.fill();
         ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
@@ -1312,18 +1318,17 @@ function CameraCalibration(){
         ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.fillText(i+1,p.x,p.y);
       });
-      // Línea entre puntos
-      if(points.length>1){
-        ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);
-        points.forEach(p=>ctx.lineTo(p.x,p.y));
-        if(points.length===4)ctx.closePath();
+      if(pts.length>1){
+        ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+        pts.forEach(p=>ctx.lineTo(p.x,p.y));
+        if(pts.length===4)ctx.closePath();
         ctx.strokeStyle='#f97316';ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
       }
       raf=requestAnimationFrame(draw);
     };
     raf=requestAnimationFrame(draw);
     return()=>cancelAnimationFrame(raf);
-  },[active,points]);
+  },[active]); // ← solo active, no points
 
   const handleCanvasClick=(e)=>{
     if(points.length>=4)return;
