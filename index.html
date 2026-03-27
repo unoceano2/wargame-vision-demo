@@ -150,6 +150,12 @@ const GAME_SYSTEMS = {
 //         - Dawn of War: revisar franjas verticales 12"
 //         - Sweeping Engagement: revisar diagonal asimétrica
 //
+// TODO-11: Actualizar zonas de despliegue en el index con las cartas físicas
+//          Iván tiene las cartas físicas de despliegue escaneadas (6 imágenes).
+//          Hay que revisar cada zona una a una contrastando con las fotos y
+//          corregir geometría, colores de zona J1/J2, posición de objetivos
+//          y exclusiones. Las imágenes están disponibles en el historial del chat.
+//
 // TODO-2: ✅ COMPLETADO — Fit-to-screen por defecto
 //         Al cargar o al hacer RESET, calcular el zoom inicial para que el
 //         tablero completo quepa en el canvas visible del dispositivo.
@@ -1625,7 +1631,7 @@ function App(){
                 onMouseLeave={handleMouseUp}
                 onWheel={handleWheel}
                 style={{display:"block",width:"100%",height:"auto",
-                  aspectRatio:"700/520",maxHeight:"calc(100vh - 160px)",
+                  aspectRatio:"700/520",maxHeight:"calc(100vh - 180px)",
                   cursor:isDraggingMini.current?"grabbing":selMini?"crosshair":isPanning.current?"grabbing":"grab"}}/>
               {assignMenu&&(
                 <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
