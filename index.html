@@ -1282,7 +1282,10 @@ function CameraCalibration(){
         :{video:{width:{ideal:1280},height:{ideal:720}}};
       const stream=await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current=stream;
-      if(videoRef.current){videoRef.current.srcObject=stream;videoRef.current.play();}
+      if(videoRef.current){
+        videoRef.current.srcObject=stream;
+        await videoRef.current.play();
+      }
       setActive(true);setPoints([]);setCalibrated(false);
     }catch(e){alert('No se pudo acceder a la cámara: '+e.message);}
   };
@@ -1303,26 +1306,28 @@ function CameraCalibration(){
     if(!active)return;
     let raf;
     const draw=()=>{
-      const v=videoRef.current,c=canvasRef.current;if(!v||!c){raf=requestAnimationFrame(draw);return;}
-      const ctx=c.getContext('2d');
-      // Solo redimensionar si el video ya tiene dimensiones
-      if(v.videoWidth>0){c.width=v.videoWidth;c.height=v.videoHeight;}
-      ctx.drawImage(v,0,0);
-      // Leer puntos desde ref (sin depender del estado)
-      const pts=pointsRef.current;
-      pts.forEach((p,i)=>{
-        ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);
-        ctx.fillStyle='#f97316';ctx.fill();
-        ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
-        ctx.fillStyle='#fff';ctx.font='bold 12px Rajdhani,monospace';
-        ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillText(i+1,p.x,p.y);
-      });
-      if(pts.length>1){
-        ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
-        pts.forEach(p=>ctx.lineTo(p.x,p.y));
-        if(pts.length===4)ctx.closePath();
-        ctx.strokeStyle='#f97316';ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
+      const v=videoRef.current,c=canvasRef.current;
+      if(!v||!c){raf=requestAnimationFrame(draw);return;}
+      if(v.readyState>=2&&v.videoWidth>0){
+        if(c.width!==v.videoWidth)c.width=v.videoWidth;
+        if(c.height!==v.videoHeight)c.height=v.videoHeight;
+        const ctx=c.getContext('2d');
+        ctx.drawImage(v,0,0);
+        const pts=pointsRef.current;
+        pts.forEach((p,i)=>{
+          ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);
+          ctx.fillStyle='#f97316';ctx.fill();
+          ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+          ctx.fillStyle='#fff';ctx.font='bold 12px Rajdhani,monospace';
+          ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText(i+1,p.x,p.y);
+        });
+        if(pts.length>1){
+          ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+          pts.forEach(p=>ctx.lineTo(p.x,p.y));
+          if(pts.length===4)ctx.closePath();
+          ctx.strokeStyle='#f97316';ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
+        }
       }
       raf=requestAnimationFrame(draw);
     };
@@ -1379,7 +1384,7 @@ function CameraCalibration(){
       {active&&(
         <div style={{marginBottom:10}}>
           <div style={{position:"relative",borderRadius:2,overflow:"hidden",border:`1px solid ${C.border}`,cursor:points.length<4?"crosshair":"default"}}>
-            <video ref={videoRef} style={{display:"none"}} playsInline muted/>
+            <video ref={videoRef} style={{position:"absolute",width:1,height:1,opacity:0,pointerEvents:"none"}} playsInline muted autoPlay/>
             <canvas ref={canvasRef} onClick={handleCanvasClick}
               style={{display:"block",width:"100%",height:"auto"}}/>
             {/* Instrucción actual */}
