@@ -1454,10 +1454,11 @@ function App(){
       ctx.strokeStyle=C.accent;ctx.lineWidth=3/baseScale;
       ctx.beginPath();ctx.moveTo(x+ox*s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+oy*s);ctx.stroke();
     });
-    // Auras fusionadas (antes de las minis para que queden debajo)
-    const {moveCentroids=[]}=drawMergedAuras(ctx,minis,players,LW,LH,BW,t,activeAuras,auraColors,selMini,auraFillMode);
+    // Auras fusionadas — si hay selección múltiple, solo mostrar auras de las seleccionadas
+    const aurasFor=selMinis.size>0?minis.filter(m=>selMinis.has(m.id)):minis;
+    const {moveCentroids=[]}=drawMergedAuras(ctx,aurasFor,players,LW,LH,BW,t,activeAuras,auraColors,selMini,auraFillMode);
     // Minis encima
-    minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,LW,LH,BW,selMini===mini.id,t,auraColors);});
+    minis.forEach(mini=>{const unit=mini.unitData;if(!unit)return;const player=players.find(p=>p.id===mini.playerId);drawUnit(ctx,mini,unit,player?.color,LW,LH,BW,selMini===mini.id||selMinis.has(mini.id),t,auraColors);});
     // TODO-8: Alertas de coherencia de unidad (2")
     drawCoherency(ctx,minis,LW,LH,BW);
     // Overlays personalizados — 1 símbolo por grupo fusionado, centrado en el centroide
@@ -1578,6 +1579,7 @@ function App(){
   const [selRect,setSelRect]=useState(null);
   const isDrawingRect=useRef(false);
   const rectStart=useRef(null);
+  const shiftRef=useRef(false); // para acumular selección con Shift al soltar rect
   const isDraggingMini=useRef(false);
   const isDraggingGroup=useRef(false);
   const groupDragStart=useRef(null);
@@ -1609,7 +1611,10 @@ function App(){
         const x0=Math.min(selRect.x0,selRect.x1),x1=Math.max(selRect.x0,selRect.x1);
         const y0=Math.min(selRect.y0,selRect.y1),y1=Math.max(selRect.y0,selRect.y1);
         const inside=new Set(minis.filter(m=>m.x>=x0&&m.x<=x1&&m.y>=y0&&m.y<=y1).map(m=>m.id));
-        if(inside.size>0)setSelMinis(inside);else setSelMinis(new Set());
+        if(inside.size>0){
+          if(shiftRef.current)setSelMinis(prev=>new Set([...prev,...inside]));
+          else setSelMinis(inside);
+        } else if(!shiftRef.current) setSelMinis(new Set());
         setSelRect(null);
       }
     };
@@ -1625,16 +1630,28 @@ function App(){
     let closest=null,minDist=0.06/(bs*zoom);
     minis.forEach(m=>{const d=Math.hypot(m.x-bx,m.y-by);if(d<minDist){minDist=d;closest=m;}});
     if(closest){
-      if(selMinis.has(closest.id)){
+      if(e.shiftKey){
+        // Shift+click: añadir/quitar de la selección múltiple
+        setSelMinis(prev=>{
+          const next=new Set(prev);
+          if(next.has(closest.id))next.delete(closest.id);
+          else next.add(closest.id);
+          return next;
+        });
+        setSelMini(null);setAssignMenu(null);
+      } else if(selMinis.has(closest.id)){
+        // Click en mini ya seleccionada → preparar drag de grupo
         isDraggingGroup.current=true;
         groupDragStart.current={bx,by,positions:Object.fromEntries(minis.filter(m=>selMinis.has(m.id)).map(m=>[m.id,{x:m.x,y:m.y}]))};
       } else {
+        // Click normal → selección individual
         setSelMinis(new Set());setSelMini(closest.id);setAssignMenu(null);isDraggingMini.current=true;
       }
     } else {
       setSelMini(null);setAssignMenu(null);
       if(selMinis.size>0){setSelMinis(new Set());return;}
       isDrawingRect.current=true;rectStart.current={bx,by};
+      shiftRef.current=e.shiftKey;
       setSelRect({x0:bx,y0:by,x1:bx,y1:by});
       isPanning.current=true;
       lastPan.current={x:rawX-bo.x-pan.x,y:rawY-bo.y-pan.y};
