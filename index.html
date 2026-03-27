@@ -250,6 +250,63 @@ const GAME_SYSTEMS = {
 //         tipo/unidad y detectar qué figuras rompen la coherencia.
 //
 // TODO-9: ✅ COMPLETADO — Calibración de cámara con 4 clicks en esquinas del tapete
+//
+// TODO-17: Responsive y uso sin proyector
+//          La app debe funcionar bien en cualquier pantalla:
+//          · Tele conectada al PC (lo más común)
+//          · Tablet en la mesa de juego
+//          · Móvil como controlador secundario
+//          · Proyector (caso avanzado)
+//
+//          Mejoras necesarias:
+//          - Layout responsive: la barra de botones y el sidebar deben
+//            adaptarse a pantallas pequeñas (tablet/móvil)
+//          - Botón FULLSCREEN en la barra del TABLERO: oculta toda la UI
+//            (botones, sidebar, pestañas) y deja solo el canvas a pantalla
+//            completa — ideal para tele o proyector
+//          - Touch events: pinch-to-zoom y drag táctil para mover minis
+//            en tablet/móvil
+//          - Modo "controlador": pantalla dividida o segunda URL donde
+//            el jugador ve la UI de control mientras otra pantalla muestra
+//            el canvas limpio
+//
+//          CONCEPTO CLAVE:
+//          La pantalla de la app web ES lo que el proyector muestra sobre el tapete.
+//          No hay ventana separada — el canvas del tablero se proyecta directamente.
+//          La app tiene dos vistas del mismo estado:
+//            · Vista jugador (navegador en pantalla) — con UI, botones, auras
+//            · Vista proyector (fullscreen sin UI) — solo el canvas, proyectado sobre el tapete
+//
+//          FLUJO COMPLETO:
+//          ┌─────────────────────────────────────────────────────────┐
+//          │  Cámara cenital → captura el tapete físico              │
+//          │      ↓                                                   │
+//          │  Calibración (4 clicks) ← YA HECHO                     │
+//          │      ↓ calcula homografía H                             │
+//          │  App web (pestaña TABLERO)                              │
+//          │    · Muestra minis, auras, coherencia                   │
+//          │    · Con cámara activa: detecta posición real de minis  │
+//          │      ↓                                                   │
+//          │  Botón FULLSCREEN → canvas sin UI, corregido con H⁻¹  │
+//          │      ↓                                                   │
+//          │  Proyector cenital → proyecta alineado con el tapete   │
+//          └─────────────────────────────────────────────────────────┘
+//
+//          PASO 1 — Calcular homografía H (DLT, JS puro):
+//          4 puntos calibración (coords cámara) → 4 esquinas del canvas
+//          H transforma coords cámara → coords tablero digital
+//
+//          PASO 2 — Modo fullscreen proyector:
+//          Botón en la barra del TABLERO que pone el canvas en fullscreen.
+//          Sin UI, sin botones — solo el tablero. El jugador controla
+//          desde el mismo dispositivo o desde otro en red local.
+//          Aplicar ctx.transform(H⁻¹) antes de dibujar para corregir
+//          la distorsión de perspectiva del proyector.
+//
+//          PASO 3 — Detección de minis con cámara (futuro, YOLOv8):
+//          YOLOv8 detecta mini en pixel (px,py) de cámara →
+//          aplicar H → posición normalizada en tablero digital →
+//          mini se mueve automáticamente en la app.
 //         PROBLEMA: Los marcadores ArUco requieren impresora. La mayoría de usuarios
 //         no tiene impresora o no quiere pegar papeles en su tapete.
 //
@@ -1374,10 +1431,9 @@ function CameraCalibration(){
         Sin impresora ni marcadores. Apunta la cámara al tapete y haz click en las 4 esquinas para calibrar la proyección.
       </div>
 
-      {/* Video SIEMPRE en el DOM para que videoRef nunca sea null */}
+      {/* Video SIEMPRE en el DOM para que videoRef nunca sea null al llamar startCamera */}
       <video ref={videoRef} playsInline muted autoPlay
-        style={{display:active?"block":"none",width:"100%",height:"auto",
-          maxHeight:360,borderRadius:2,background:"#000"}}/>
+        style={{position:"fixed",top:-9999,left:-9999,width:1,height:1,opacity:0,pointerEvents:"none"}}/>
 
       {/* Estado de calibración guardada */}
       {savedCalib&&!active&&(
@@ -1390,11 +1446,15 @@ function CameraCalibration(){
         </div>
       )}
 
-      {/* Visor de cámara — canvas superpuesto sobre el video */}
+      {/* Visor de cámara — video + canvas superpuesto */}
       {active&&(
         <div style={{marginBottom:10}}>
-          <div style={{position:"relative",marginTop:6}}>
-            {/* Canvas superpuesto para los puntos — mismo tamaño que el video */}
+          <div style={{position:"relative",marginTop:6,borderRadius:2,overflow:"hidden",
+            border:`1px solid ${C.border}`,lineHeight:0}}>
+            {/* Video visible — da la altura al contenedor */}
+            <video ref={videoRef} playsInline muted autoPlay
+              style={{display:"block",width:"100%",height:"auto",maxHeight:360}}/>
+            {/* Canvas encima — captura clicks y dibuja puntos */}
             <canvas ref={canvasRef} onClick={handleCanvasClick}
               style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",
                 cursor:points.length<4?"crosshair":"default",zIndex:1}}/>
@@ -1469,6 +1529,7 @@ function App(){
   const [selMini,setSelMini]=useState(null);
   const [assignMenu,setAssignMenu]=useState(null);
   const [tab,setTab]=useState("TABLERO");
+  const [fullscreen,setFullscreen]=useState(false);
   const [activeAuras,setActiveAuras]=useState({move:false,charge:false,shoot:false,abilities:false,engage:false});
   const prevAuras=useRef({move:true,charge:true,shoot:true,abilities:true,engage:false});
   const [auraFillMode,setAuraFillMode]=useState("fill"); // "fill" | "border"
@@ -1611,7 +1672,7 @@ function App(){
   const modeInfo=sysInfo.modes[activeMode];
 
   useEffect(()=>{
-    if(tab!=="TABLERO")return;
+    if(tab!=="TABLERO"&&!fullscreen)return;
     const canvas=canvasRef.current;if(!canvas)return;
     // Sincronizar tamaño interno con CSS para nitidez
     const dpr=window.devicePixelRatio||1;
@@ -1766,7 +1827,7 @@ function App(){
     }
 
     ctx.restore();
-  },[tab,minis,players,selMini,selMinis,selRect,tick,activeAuras,activeZone,modeInfo,zoom,pan,overlays,auraFillMode,auraColors]);
+  },[tab,fullscreen,minis,players,selMini,selMinis,selRect,tick,activeAuras,activeZone,modeInfo,zoom,pan,overlays,auraFillMode,auraColors]);
 
   // Zoom con rueda del ratón
   // Zoom con rueda — centrado en el cursor
@@ -1812,7 +1873,12 @@ function App(){
   };
 
   useEffect(()=>{
-    const onKey=(e)=>{if(e.key==='Escape'){setSelMinis(new Set());setSelRect(null);setSelMini(null);setAssignMenu(null);}};
+    const onKey=(e)=>{
+      if(e.key==='Escape'){
+        setSelMinis(new Set());setSelRect(null);setSelMini(null);setAssignMenu(null);
+        setFullscreen(false); // salir de fullscreen con Escape
+      }
+    };
     document.addEventListener('keydown',onKey);
     return()=>document.removeEventListener('keydown',onKey);
   },[]);
@@ -1969,6 +2035,29 @@ function App(){
   return(
     <div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Rajdhani',monospace",color:C.text}}>
 
+      {/* ── MODO FULLSCREEN ── solo el canvas, sin UI */}
+      {fullscreen&&(
+        <div style={{position:"fixed",inset:0,background:"#000",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <canvas ref={canvasRef}
+            onClick={handleCanvasClick}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onWheel={handleWheel}
+            style={{width:"100vw",height:"100vh",objectFit:"contain",cursor:"crosshair"}}/>
+          {/* Botón salir — pequeño, esquina, desaparece al cabo de 3s con hover */}
+          <button onClick={()=>setFullscreen(false)}
+            style={{position:"fixed",bottom:16,right:16,padding:"6px 12px",
+              background:"rgba(5,13,26,0.7)",border:`1px solid ${C.border}`,
+              borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",
+              fontSize:11,letterSpacing:1,opacity:0.4,transition:"opacity .3s",zIndex:10000}}
+            onMouseEnter={e=>e.currentTarget.style.opacity=1}
+            onMouseLeave={e=>e.currentTarget.style.opacity=0.4}>
+            ESC / SALIR
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`,padding:"8px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"relative"}}>
         <div style={{position:"absolute",bottom:0,left:0,right:0,height:"1px",background:`linear-gradient(90deg,transparent,${C.accent},transparent)`,opacity:.4}}/>
@@ -2021,6 +2110,10 @@ function App(){
                 </button>);
               })}
               <button onClick={()=>setShowLegend(true)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:C.blue,color:C.blue}}>? ÍNDICE</button>
+              {/* Botón fullscreen */}
+              <button onClick={()=>setFullscreen(true)} className="rb"
+                style={{padding:"3px 8px",fontSize:13,marginLeft:"auto",borderColor:C.border,color:C.muted}}
+                title="Pantalla completa (Esc para salir)">⛶</button>
               {/* Toggle global auras */}
               <button onClick={()=>{
                 const anyOn=Object.values(activeAuras).some(Boolean);
