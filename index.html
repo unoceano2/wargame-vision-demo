@@ -200,13 +200,33 @@ const GAME_SYSTEMS = {
 //         Mover el grupo arrastrando cualquier mini del grupo seleccionado.
 //         Escape o click fuera = deseleccionar.
 //
-// TODO-10: Despliegue de unidad completa con un botón
+// TODO-10: ✅ COMPLETADO — Despliegue de unidad completa con botón ▶▶
 //          Añadir botón "▶▶ DESPLEGAR TODOS" junto al nombre de la unidad
 //          en la pestaña JUEGO. Al pulsarlo, despliega todas las figuras
 //          pendientes de esa unidad de una vez, colocándolas en formación
 //          ordenada (grid o línea) dentro de la zona de despliegue del jugador.
 //          Para unidades grandes (20 Termagantes) colocarlas en una cuadrícula
 //          2" de separación entre figuras respetando la coherencia de unidad.
+//
+// TODO-15: ✅ COMPLETADO — Aura de carga con 11 círculos por probabilidad 2D6
+//          El aura de carga actual muestra M+7" (media estadística de 2D6).
+//          Solución: mostrar 11 círculos concéntricos, uno por cada resultado
+//          posible de 2D6 (del 2 al 12), con opacidad proporcional a la
+//          probabilidad de ese resultado:
+//            2:  1/36 → casi invisible
+//            3:  2/36
+//            4:  3/36
+//            5:  4/36
+//            6:  5/36
+//            7:  6/36 → más opaco (resultado más probable)
+//            8:  5/36
+//            9:  4/36
+//            10: 3/36
+//            11: 2/36
+//            12: 1/36 → casi invisible
+//          El círculo de M+7" sigue siendo el principal (más grueso).
+//          Los demás son más finos y semitransparentes.
+//          El usuario puede desactivar este modo y volver al círculo único.
 //
 // TODO-6: ✅ COMPLETADO — Líneas internas en modo contorno (dash solo sobre borde exterior)
 //         En modo "border" (sin relleno) aún se ven las líneas discontinuas
@@ -632,10 +652,10 @@ function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMi
   const groups={};
 
   // TODO-3 FIX: clave incluye playerId para separar auras de cada jugador
-  const addCircle=(key,cx,cy,rad,color,label,dash,lineW,pid)=>{
+  const addCircle=(key,cx,cy,rad,color,label,dash,lineW,pid,opacity=1)=>{
     const fk=`${pid||'x'}_${key}`;
     const dp=dash?playerDash(pid):[0];
-    if(!groups[fk])groups[fk]={circles:[],color,label,dash,lineW,dashPattern:dp};
+    if(!groups[fk])groups[fk]={circles:[],color,label,dash,lineW,dashPattern:dp,opacity};
     groups[fk].circles.push({cx,cy,rad});
   };
 
@@ -674,8 +694,25 @@ function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMi
       addCircle(`move_${Math.round(rad)}`,cx,cy,rad,tintAura(auraColors.move,pc),`M ${mv}"`,true,1.5,pid);
     }
     if(activeAuras.charge){
-      const rad=bsz+(mv+7)*inchPx;
-      addCircle(`charge_${Math.round(rad)}`,cx,cy,rad,tintAura(auraColors.charge,pc),null,true,1,pid);
+      // TODO-15: 11 círculos con probabilidad 2D6 (resultado 2 al 12)
+      // Probabilidades: nº de combinaciones / 36
+      const D2_PROB=[0,0,1,2,3,4,5,6,5,4,3,2,1]; // índice = resultado dado
+      const maxProb=6; // resultado 7 tiene prob máxima
+      D2_PROB.forEach((prob,result)=>{
+        if(!prob)return;
+        const rad=bsz+(mv+result)*inchPx;
+        const opacity=prob/maxProb; // 0.17 a 1.0
+        const isMedian=result===7;
+        // Usar clave única por resultado para que NO se fusionen entre sí
+        addCircle(`charge_r${result}_${pid}`,cx,cy,rad,
+          tintAura(auraColors.charge,pc),
+          isMedian?`C ${result}"`:"",  // etiqueta solo en el 7 (mediana)
+          true,
+          isMedian?1.5:0.6,  // el 7 más grueso
+          pid,
+          opacity  // opacidad proporcional a probabilidad
+        );
+      });
     }
     if(activeAuras.abilities){
       (unit.abilities||[]).forEach(ab=>{
@@ -689,7 +726,7 @@ function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMi
 
   const moveCentroids=[];
 
-  Object.entries(groups).forEach(([key,{circles,color,label,dash,lineW,dashPattern}])=>{
+  Object.entries(groups).forEach(([key,{circles,color,label,dash,lineW,dashPattern,opacity=1}])=>{
     if(!circles.length)return;
     const [r,g,b]=h2p(color);
     const isMoveGroup=key.includes('_move_');
@@ -699,7 +736,7 @@ function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMi
     ctx.save();
 
     if(fillMode==='fill'){
-      ctx.globalAlpha=0.07;ctx.fillStyle=`rgb(${r},${g},${b})`;
+      ctx.globalAlpha=0.07*opacity;ctx.fillStyle=`rgb(${r},${g},${b})`;
       circles.forEach(({cx,cy,rad})=>{ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fill();});
       ctx.globalAlpha=1;
     }
@@ -715,7 +752,8 @@ function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMi
     bctx.globalCompositeOperation='source-in';
     bctx.fillStyle=color;bctx.fillRect(0,0,W,H);
     ctx.shadowColor=color;ctx.shadowBlur=fillMode==='border'?8:4;
-    ctx.drawImage(bOff,0,0);ctx.shadowBlur=0;
+    ctx.globalAlpha=opacity;
+    ctx.drawImage(bOff,0,0);ctx.shadowBlur=0;ctx.globalAlpha=1;
 
     if(dash){
       if(fillMode==='border'){
@@ -734,7 +772,7 @@ function drawMergedAuras(ctx,minis,players,W,H,BW,t,activeAuras,auraColors,selMi
         dctx.setLineDash([]);
         ctx.drawImage(dOff,0,0);
       } else {
-        ctx.globalAlpha=0.85;ctx.strokeStyle=color;ctx.lineWidth=lineW;
+        ctx.globalAlpha=0.85*opacity;ctx.strokeStyle=color;ctx.lineWidth=lineW;
         ctx.setLineDash(dashPattern||[5,7]);ctx.lineDashOffset=-(t*15)%12;
         circles.forEach(({cx,cy,rad})=>{ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.stroke();});
         ctx.setLineDash([]);ctx.globalAlpha=1;
@@ -1028,7 +1066,7 @@ function StatusBadge({status}){
   return <span style={{fontSize:12,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:s.color,background:s.bg,border:`1px solid ${s.color}44`}}>{s.label}</span>;
 }
 
-function UnitRow({unit,unitSt,playerColor,onDeploy,onEliminate,selected,onClick}){
+function UnitRow({unit,unitSt,playerColor,onDeploy,onDeployAll,onEliminate,selected,onClick}){
   // unitSt = {deployed, eliminated, total}
   const st=unitSt||{deployed:0,eliminated:0,total:unit.count||1};
   const pending=Math.max(0,st.total-st.deployed-st.eliminated);
@@ -1074,10 +1112,19 @@ function UnitRow({unit,unitSt,playerColor,onDeploy,onEliminate,selected,onClick}
         {!allEliminated&&(
           <div style={{display:"flex",gap:4,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
             {pending>0&&(
-              <button onClick={e=>{e.stopPropagation();onDeploy();}}
-                className="rb gon" style={{padding:"4px 10px",fontSize:11,whiteSpace:"nowrap"}}>
-                {isMulti?`▶ +FIGURA (${pending})`:"▶ DESPLEGAR"}
-              </button>
+              <div style={{display:"flex",gap:3}}>
+                <button onClick={e=>{e.stopPropagation();onDeploy();}}
+                  className="rb gon" style={{padding:"4px 10px",fontSize:11,whiteSpace:"nowrap"}}>
+                  {isMulti?`▶ +FIGURA (${pending})`:"▶ DESPLEGAR"}
+                </button>
+                {isMulti&&pending>1&&(
+                  <button onClick={e=>{e.stopPropagation();onDeployAll();}}
+                    className="rb gon" style={{padding:"4px 8px",fontSize:11,whiteSpace:"nowrap",opacity:0.8}}
+                    title={`Desplegar las ${pending} figuras restantes en cuadrícula`}>
+                    ▶▶
+                  </button>
+                )}
+              </div>
             )}
             {st.deployed>0&&(
               <button onClick={e=>{e.stopPropagation();onEliminate();}}
@@ -1242,6 +1289,49 @@ function App(){
       [playerId]:{
         ...prev[playerId],
         [unit.id]:{...st,deployed:st.deployed+1},
+      }
+    }));
+  };
+
+  // TODO-10: Desplegar toda la unidad de golpe en cuadrícula con 2" de separación
+  const deployAllUnit=(playerId,unit,patrol)=>{
+    const st=unitStatus[playerId]?.[unit.id]||{deployed:0,eliminated:0,total:unit.count||1};
+    const pending=Math.max(0,st.total-st.deployed-st.eliminated);
+    if(!pending)return;
+    const modeInfo=GAME_SYSTEMS[activeSystem].modes[activeMode];
+    const BW=modeInfo.w; // ancho del tablero en pulgadas
+    const BH=modeInfo.h;
+    // Separación entre figuras: 1.5" (dentro de la coherencia de 2")
+    const sepInch=1.5;
+    const sepX=sepInch/BW; // en espacio normalizado (0-1)
+    const sepY=sepInch/BH;
+    // Punto de inicio: borde del jugador con margen
+    const startX=playerId===1?0.04:0.96;
+    const startY=0.05;
+    const cols=playerId===1?Math.floor(0.2/sepX):Math.floor(0.2/sepX);
+    const newMinis=[];
+    for(let i=0;i<pending;i++){
+      const col=i%Math.max(1,cols);
+      const row=Math.floor(i/Math.max(1,cols));
+      const x=playerId===1
+        ?startX+col*sepX
+        :startX-col*sepX;
+      const y=startY+row*sepY;
+      newMinis.push({
+        id:`mini_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,
+        unitData:{...unit,faction_keyword:patrol.faction_keyword},
+        figureIndex:st.deployed+i,
+        x:Math.max(0.01,Math.min(0.99,x)),
+        y:Math.max(0.01,Math.min(0.99,y)),
+        playerId,
+      });
+    }
+    setMinis(prev=>[...prev,...newMinis]);
+    setUnitStatus(prev=>({
+      ...prev,
+      [playerId]:{
+        ...prev[playerId],
+        [unit.id]:{...st,deployed:st.deployed+pending},
       }
     }));
   };
@@ -1831,6 +1921,7 @@ function App(){
                             unitSt={unitSt} playerColor={p.color} selected={isSel}
                             onClick={()=>setSelUnit(isSel?null:{playerId:p.id,unitId:unit.id})}
                             onDeploy={()=>deployUnit(p.id,unit,patrol)}
+                            onDeployAll={()=>deployAllUnit(p.id,unit,patrol)}
                             onEliminate={()=>lastMini&&eliminateUnit(p.id,unit.id,lastMini.id)}/>
                         );
                       })}
