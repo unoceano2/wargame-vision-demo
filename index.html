@@ -194,7 +194,7 @@ const GAME_SYSTEMS = {
 //         Guardar en localStorage (base64) para recuperarlas entre sesiones.
 //         Añadir botón "eliminar imagen guardada" en la lista.
 //
-// TODO-5: Selector rectangular de múltiples minis
+// TODO-5: ✅ COMPLETADO — Selector rectangular de múltiples minis con movimiento de grupo
 //         Drag sin mini seleccionada = rectángulo de selección.
 //         Las minis dentro del rectángulo quedan seleccionadas (selMinis[]).
 //         Mover el grupo arrastrando cualquier mini del grupo seleccionado.
@@ -1518,8 +1518,40 @@ function App(){
         ctx.restore();
       });
     });
+
+    // Highlight de minis seleccionadas (selección múltiple)
+    if(selMinis.size>0){
+      minis.forEach(mini=>{
+        if(!selMinis.has(mini.id))return;
+        const unit=mini.unitData;if(!unit)return;
+        const cx=mini.x*LW,cy=mini.y*LH;
+        const inchPx=LW/BW;
+        const bsz=(unit.base_size_mm/2/25.4)*inchPx;
+        ctx.save();
+        ctx.beginPath();ctx.arc(cx,cy,bsz+3,0,Math.PI*2);
+        ctx.strokeStyle="#ffffff";ctx.lineWidth=2;ctx.setLineDash([3,3]);
+        ctx.globalAlpha=0.8;ctx.stroke();
+        ctx.setLineDash([]);ctx.globalAlpha=1;
+        ctx.restore();
+      });
+    }
+
+    // Rectángulo de selección en curso
+    if(selRect){
+      const rx=Math.min(selRect.x0,selRect.x1)*LW;
+      const ry=Math.min(selRect.y0,selRect.y1)*LH;
+      const rw=(Math.abs(selRect.x1-selRect.x0))*LW;
+      const rh=(Math.abs(selRect.y1-selRect.y0))*LH;
+      ctx.save();
+      ctx.strokeStyle="#ffffff";ctx.lineWidth=1;ctx.setLineDash([4,4]);
+      ctx.globalAlpha=0.7;ctx.strokeRect(rx,ry,rw,rh);
+      ctx.fillStyle="rgba(255,255,255,0.06)";ctx.fillRect(rx,ry,rw,rh);
+      ctx.setLineDash([]);ctx.globalAlpha=1;
+      ctx.restore();
+    }
+
     ctx.restore();
-  },[tab,minis,players,selMini,tick,activeAuras,activeZone,modeInfo,zoom,pan,overlays,auraFillMode,auraColors]);
+  },[tab,minis,players,selMini,selMinis,selRect,tick,activeAuras,activeZone,modeInfo,zoom,pan,overlays,auraFillMode,auraColors]);
 
   // Zoom con rueda del ratón
   // Zoom con rueda — centrado en el cursor
@@ -1541,72 +1573,114 @@ function App(){
 
   const resetZoom=()=>{setZoom(1);setPan({x:0,y:0});};
 
+  // TODO-5: ✅ COMPLETADO — Selector rectangular de múltiples minis con movimiento de grupo
+  const [selMinis,setSelMinis]=useState(new Set());
+  const [selRect,setSelRect]=useState(null);
+  const isDrawingRect=useRef(false);
+  const rectStart=useRef(null);
   const isDraggingMini=useRef(false);
+  const isDraggingGroup=useRef(false);
+  const groupDragStart=useRef(null);
   const mouseDownPos=useRef(null);
   const baseScaleRef=useRef(1);
   const baseOffRef=useRef({x:0,y:0});
   const DRAG_THRESHOLD=4;
 
-  useEffect(()=>{
-    const onUp=()=>{isPanning.current=false;isDraggingMini.current=false;mouseDownPos.current=null;};
-    document.addEventListener('mouseup',onUp);
-    return()=>document.removeEventListener('mouseup',onUp);
-  },[]);
-
-  const handleMouseDown=(e)=>{
-    mouseDownPos.current={x:e.clientX,y:e.clientY};
-    isDraggingMini.current=false;
-    if(!selMini){
-      isPanning.current=true;
-      const rect=canvasRef.current.getBoundingClientRect();
-      const dpr=window.devicePixelRatio||1;
-      const rawX=(e.clientX-rect.left)*(canvasRef.current.width/rect.width)/dpr;
-      const rawY=(e.clientY-rect.top)*(canvasRef.current.height/rect.height)/dpr;
-      lastPan.current={x:rawX-baseOffRef.current.x-pan.x,y:rawY-baseOffRef.current.y-pan.y};
-    }
-  };
-  const handleMouseMove=(e)=>{
-    if(!e.buttons){isPanning.current=false;isDraggingMini.current=false;return;}
-    if(mouseDownPos.current&&selMini&&!isDraggingMini.current){
-      const dx=e.clientX-mouseDownPos.current.x,dy=e.clientY-mouseDownPos.current.y;
-      if(Math.hypot(dx,dy)>DRAG_THRESHOLD)isDraggingMini.current=true;
-    }
-    if(selMini&&isDraggingMini.current){handleCanvasDrag(e);return;}
-    if(!isPanning.current)return;
+  const eventToBoard=(e)=>{
     const rect=canvasRef.current.getBoundingClientRect();
     const dpr=window.devicePixelRatio||1;
-    const rawX=(e.clientX-rect.left)*(canvasRef.current.width/rect.width)/dpr;
-    const rawY=(e.clientY-rect.top)*(canvasRef.current.height/rect.height)/dpr;
-    setPan({x:rawX-baseOffRef.current.x-lastPan.current.x,y:rawY-baseOffRef.current.y-lastPan.current.y});
-  };
-  const handleMouseUp=()=>{isPanning.current=false;isDraggingMini.current=false;mouseDownPos.current=null;};
-
-  const handleCanvasClick=(e)=>{
-    const rect=canvasRef.current.getBoundingClientRect();
-    const dpr=window.devicePixelRatio||1;
-    // Coordenadas en espacio lógico del canvas (sin dpr)
     const rawX=(e.clientX-rect.left)*(canvasRef.current.width/rect.width)/dpr;
     const rawY=(e.clientY-rect.top)*(canvasRef.current.height/rect.height)/dpr;
     const bs=baseScaleRef.current,bo=baseOffRef.current;
-    // Convertir a coordenadas normalizadas del tablero (0-1)
-    const mx=((rawX-bo.x-pan.x)/(bs*zoom))/700;
-    const my=((rawY-bo.y-pan.y)/(bs*zoom))/520;
+    return{bx:Math.max(0,Math.min(1,((rawX-bo.x-pan.x)/(bs*zoom))/700)),by:Math.max(0,Math.min(1,((rawY-bo.y-pan.y)/(bs*zoom))/520)),rawX,rawY};
+  };
+
+  useEffect(()=>{
+    const onKey=(e)=>{if(e.key==='Escape'){setSelMinis(new Set());setSelRect(null);setSelMini(null);setAssignMenu(null);}};
+    document.addEventListener('keydown',onKey);
+    return()=>document.removeEventListener('keydown',onKey);
+  },[]);
+
+  useEffect(()=>{
+    const onUp=()=>{
+      isPanning.current=false;isDraggingMini.current=false;isDraggingGroup.current=false;
+      isDrawingRect.current=false;mouseDownPos.current=null;groupDragStart.current=null;
+      if(selRect){
+        const x0=Math.min(selRect.x0,selRect.x1),x1=Math.max(selRect.x0,selRect.x1);
+        const y0=Math.min(selRect.y0,selRect.y1),y1=Math.max(selRect.y0,selRect.y1);
+        const inside=new Set(minis.filter(m=>m.x>=x0&&m.x<=x1&&m.y>=y0&&m.y<=y1).map(m=>m.id));
+        if(inside.size>0)setSelMinis(inside);else setSelMinis(new Set());
+        setSelRect(null);
+      }
+    };
+    document.addEventListener('mouseup',onUp);
+    return()=>document.removeEventListener('mouseup',onUp);
+  },[selRect,minis]);
+
+  const handleMouseDown=(e)=>{
+    mouseDownPos.current={x:e.clientX,y:e.clientY};
+    isDraggingMini.current=false;isDraggingGroup.current=false;isDrawingRect.current=false;
+    const {bx,by,rawX,rawY}=eventToBoard(e);
+    const bs=baseScaleRef.current,bo=baseOffRef.current;
     let closest=null,minDist=0.06/(bs*zoom);
-    minis.forEach(m=>{const d=Math.hypot(m.x-mx,m.y-my);if(d<minDist){minDist=d;closest=m;}});
+    minis.forEach(m=>{const d=Math.hypot(m.x-bx,m.y-by);if(d<minDist){minDist=d;closest=m;}});
+    if(closest){
+      if(selMinis.has(closest.id)){
+        isDraggingGroup.current=true;
+        groupDragStart.current={bx,by,positions:Object.fromEntries(minis.filter(m=>selMinis.has(m.id)).map(m=>[m.id,{x:m.x,y:m.y}]))};
+      } else {
+        setSelMinis(new Set());setSelMini(closest.id);setAssignMenu(null);isDraggingMini.current=true;
+      }
+    } else {
+      setSelMini(null);setAssignMenu(null);
+      if(selMinis.size>0){setSelMinis(new Set());return;}
+      isDrawingRect.current=true;rectStart.current={bx,by};
+      setSelRect({x0:bx,y0:by,x1:bx,y1:by});
+      isPanning.current=true;
+      lastPan.current={x:rawX-bo.x-pan.x,y:rawY-bo.y-pan.y};
+    }
+  };
+
+  const handleMouseMove=(e)=>{
+    if(!e.buttons){isPanning.current=false;isDraggingMini.current=false;isDraggingGroup.current=false;isDrawingRect.current=false;return;}
+    const moved=mouseDownPos.current&&Math.hypot(e.clientX-mouseDownPos.current.x,e.clientY-mouseDownPos.current.y)>DRAG_THRESHOLD;
+    const {bx,by,rawX,rawY}=eventToBoard(e);
+    if(isDraggingGroup.current&&moved&&groupDragStart.current){
+      const dx=bx-groupDragStart.current.bx,dy=by-groupDragStart.current.by;
+      setMinis(prev=>prev.map(m=>{
+        if(!selMinis.has(m.id))return m;
+        const orig=groupDragStart.current.positions[m.id];
+        return{...m,x:Math.max(0,Math.min(1,orig.x+dx)),y:Math.max(0,Math.min(1,orig.y+dy))};
+      }));
+      return;
+    }
+    if(selMini&&isDraggingMini.current&&moved){handleCanvasDrag(e);return;}
+    if(isDrawingRect.current&&moved&&rectStart.current){
+      isPanning.current=false;
+      setSelRect({x0:rectStart.current.bx,y0:rectStart.current.by,x1:bx,y1:by});
+      return;
+    }
+    if(!isPanning.current||!moved)return;
+    const bo=baseOffRef.current;
+    setPan({x:rawX-bo.x-lastPan.current.x,y:rawY-bo.y-lastPan.current.y});
+  };
+
+  const handleMouseUp=()=>{isPanning.current=false;isDraggingMini.current=false;mouseDownPos.current=null;};
+
+  const handleCanvasClick=(e)=>{
+    const {bx,by}=eventToBoard(e);
+    const rect=canvasRef.current.getBoundingClientRect();
+    const bs=baseScaleRef.current;
+    let closest=null,minDist=0.06/(bs*zoom);
+    minis.forEach(m=>{const d=Math.hypot(m.x-bx,m.y-by);if(d<minDist){minDist=d;closest=m;}});
     if(closest){setSelMini(closest.id);setAssignMenu({miniId:closest.id,x:e.clientX-rect.left,y:e.clientY-rect.top});}
     else{setSelMini(null);setAssignMenu(null);}
   };
 
   const handleCanvasDrag=(e)=>{
     if(!selMini)return;
-    const rect=canvasRef.current.getBoundingClientRect();
-    const dpr=window.devicePixelRatio||1;
-    const rawX=(e.clientX-rect.left)*(canvasRef.current.width/rect.width)/dpr;
-    const rawY=(e.clientY-rect.top)*(canvasRef.current.height/rect.height)/dpr;
-    const bs=baseScaleRef.current,bo=baseOffRef.current;
-    const nx=Math.max(0,Math.min(1,((rawX-bo.x-pan.x)/(bs*zoom))/700));
-    const ny=Math.max(0,Math.min(1,((rawY-bo.y-pan.y)/(bs*zoom))/520));
-    setMinis(prev=>prev.map(m=>m.id===selMini?{...m,x:nx,y:ny}:m));
+    const {bx,by}=eventToBoard(e);
+    setMinis(prev=>prev.map(m=>m.id===selMini?{...m,x:bx,y:by}:m));
     setAssignMenu(null);
   };
 
@@ -1784,7 +1858,7 @@ function App(){
                 onWheel={handleWheel}
                 style={{display:"block",width:"100%",height:"auto",
                   aspectRatio:"700/520",maxHeight:"calc(100vh - 180px)",
-                  cursor:isDraggingMini.current?"grabbing":selMini?"crosshair":isPanning.current?"grabbing":"grab"}}/>
+                  cursor:isDraggingGroup.current?"grabbing":isDraggingMini.current?"grabbing":selMinis.size>0?"grab":selMini?"crosshair":isPanning.current?"grabbing":"crosshair"}}/>
               {assignMenu&&(
                 <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
                   <div style={{fontSize:12,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
