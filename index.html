@@ -11,18 +11,18 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --fs-xs:11px; --fs-sm:12px; --fs-md:13px; --fs-lg:14px; --fs-xl:16px;
+  --fs-xs:12px; --fs-sm:13px; --fs-md:14px; --fs-lg:15px; --fs-xl:17px;
   --lh:1.5;
 }
 body{background:#050d1a;color:#c8dff5;font-family:'Rajdhani',monospace;overflow-x:hidden;font-size:var(--fs-lg);}
-::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#050d1a;}::-webkit-scrollbar-thumb{background:#0e2a4a;}
-.rb{border:1px solid #0e2a4a;background:transparent;color:#3a5a7a;cursor:pointer;font-family:'Rajdhani',monospace;font-weight:600;letter-spacing:1px;transition:all .2s;font-size:var(--fs-md);}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#050d1a;}::-webkit-scrollbar-thumb{background:#1e3a5a;}
+.rb{border:1px solid #1e3a5a;background:transparent;color:#7ab3d4;cursor:pointer;font-family:'Rajdhani',monospace;font-weight:600;letter-spacing:1px;transition:all .2s;font-size:var(--fs-sm);padding:4px 10px;}
 .rb:hover{border-color:#f97316;color:#f97316;}
 .rb.on{border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.18);}
 .rb.bon{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,0.12);}
 .rb.gon{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,0.12);}
 .rb.ron{border-color:#f43f5e;color:#f43f5e;background:rgba(244,63,94,0.12);}
-.panel{background:#070f20;border:1px solid #0e2a4a;position:relative;overflow:hidden;}
+.panel{background:#070f20;border:1px solid #1e3a5a;position:relative;overflow:hidden;}
 .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#f97316,transparent);opacity:.4;}
 .tag{font-size:var(--fs-sm);font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:2px;}
 /* Escalar todos los textos inline que se quedan pequeños */
@@ -33,13 +33,13 @@ span,div,p,label{font-size:inherit;}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .fade-in{animation:fadeIn .25s ease;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
-.unit-row{border:1px solid #0e2a4a;border-radius:2px;padding:9px 12px;margin-bottom:5px;transition:all .2s;background:#050d1a;cursor:pointer;font-size:var(--fs-md);}
+.unit-row{border:1px solid #1e3a5a;border-radius:2px;padding:9px 12px;margin-bottom:5px;transition:all .2s;background:#050d1a;cursor:pointer;font-size:var(--fs-md);}
 .unit-row:hover{border-color:#1e3a5a;}
 .unit-row.deployed{border-color:#22c55e44;background:rgba(34,197,94,0.04);}
 .unit-row.eliminated{border-color:#f43f5e22;background:rgba(244,63,94,0.04);opacity:0.5;}
 .unit-row.selected-unit{border-color:#f97316;background:rgba(249,115,22,0.06);}
 .aura-badge{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:2px;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;margin:2px;}
-.drop-zone{border:2px dashed #0e2a4a;border-radius:4px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;font-size:var(--fs-md);}
+.drop-zone{border:2px dashed #1e3a5a;border-radius:4px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;font-size:var(--fs-md);}
 .drop-zone:hover,.drop-zone.drag-over{border-color:#38bdf8;background:rgba(56,189,248,0.05);}
 input[type=file]{display:none;}
 /* Forzar herencia en todos los contenedores React */
@@ -53,7 +53,7 @@ input[type=file]{display:none;}
 <script type="text/babel">
 const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
-const C = {bg:"#050d1a",panel:"#070f20",border:"#0e2a4a",accent:"#f97316",blue:"#38bdf8",text:"#c8dff5",muted:"#3a5a7a",green:"#22c55e",purple:"#a855f7",red:"#f43f5e",yellow:"#fbbf24"};
+const C = {bg:"#050d1a",panel:"#070f20",border:"#1e3a5a",accent:"#f97316",blue:"#38bdf8",text:"#c8dff5",muted:"#6a9aba",green:"#22c55e",purple:"#a855f7",red:"#f43f5e",yellow:"#fbbf24"};
 const PLAYER_COLORS = ["#f97316","#38bdf8","#22c55e","#a855f7","#f43f5e","#fbbf24"];
 const FACTION_COLORS = {"Adeptus Astartes":"#38bdf8","Aeldari":"#22c55e","Tiránidos":"#a855f7","Orks":"#84cc16","Necrons":"#06b6d4","Chaos":"#a855f7","T'au":"#f59e0b","Drukhari":"#f43f5e"};
 const h2p = h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
@@ -251,6 +251,16 @@ const GAME_SYSTEMS = {
 //
 // TODO-9: ✅ COMPLETADO — Calibración de cámara con 4 clicks en esquinas del tapete
 //
+// TODO-18: Legibilidad de botones e interfaz
+//          El texto de los botones (11px, letterSpacing:1) es difícil de leer,
+//          especialmente en pantallas pequeñas o con minis en el tablero.
+//          Mejoras necesarias:
+//          - Aumentar fontSize de botones de 11px a 13px mínimo
+//          - Aumentar contraste: color activo más brillante, inactivo más visible
+//          - Aumentar padding de botones para área de click más grande
+//          - Revisar todos los textos de la UI: sidebar, labels, stats
+//          - Considerar fuente más legible para los labels (no solo Rajdhani)
+//
 // TODO-17: Responsive y uso sin proyector
 //          La app debe funcionar bien en cualquier pantalla:
 //          · Tele conectada al PC (lo más común)
@@ -311,6 +321,14 @@ const GAME_SYSTEMS = {
 //          YOLOv8 detecta mini en pixel (px,py) de cámara →
 //          aplicar H → posición normalizada en tablero digital →
 //          mini se mueve automáticamente en la app.
+//
+//          REQUISITOS DE HARDWARE PARA DETECCIÓN FIABLE:
+//          · Cámara: mínimo 1080p, buen rendimiento en baja luz (f/1.8 o mejor)
+//            Opciones: Logitech C920/C922, móvil viejo montado cenital, cámara IP
+//          · Iluminación: luz blanca difusa desde arriba, sin sombras duras
+//            Evitar luz ambiental variable (ventanas). LED cenital o aro de luz.
+//          · Montura: cámara fija cenital, sin vibración, bien sujeta
+//          · El grano/ruido en baja luz degrada mucho la detección de YOLOv8
 //         PROBLEMA: Los marcadores ArUco requieren impresora. La mayoría de usuarios
 //         no tiene impresora o no quiere pegar papeles en su tapete.
 //
@@ -999,7 +1017,7 @@ function OverlayManager({overlays,setOverlays,players}){
                 background:"#111",border:`1px solid ${C.border}`}}>
                 <img src={ov.src} style={{width:"100%",height:"100%",objectFit:"contain"}} alt=""/>
               </div>
-              <span style={{flex:1,fontSize:12,color:selId===ov.id?C.accent:C.text,
+              <span style={{flex:1,fontSize:13,color:selId===ov.id?C.accent:C.text,
                 letterSpacing:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {ov.name}
               </span>
@@ -1007,12 +1025,12 @@ function OverlayManager({overlays,setOverlays,players}){
               <button onClick={e=>{e.stopPropagation();update(ov.id,"visible",!ov.visible);}}
                 style={{padding:"2px 6px",background:"transparent",border:`1px solid ${ov.visible?C.green:C.border}`,
                   borderRadius:2,cursor:"pointer",color:ov.visible?C.green:C.muted,
-                  fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700}}>
+                  fontFamily:"'Rajdhani',monospace",fontSize:13,fontWeight:700}}>
                 {ov.visible?"ON":"OFF"}
               </button>
               <button onClick={e=>{e.stopPropagation();remove(ov.id);}}
                 style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,
-                  borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:12}}
+                  borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:13}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=C.red}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>✕</button>
             </div>
@@ -1024,24 +1042,24 @@ function OverlayManager({overlays,setOverlays,players}){
       {sel&&(
         <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,
           padding:10,marginBottom:10}} className="fade-in">
-          <div style={{fontSize:12,color:C.accent,letterSpacing:2,marginBottom:8}}>
+          <div style={{fontSize:13,color:C.accent,letterSpacing:2,marginBottom:8}}>
             AJUSTAR — {sel.name.toUpperCase()}
           </div>
           {/* Selector jugador */}
           <div style={{marginBottom:8}}>
-            <div style={{fontSize:11,color:C.muted,letterSpacing:1,marginBottom:5}}>MOSTRAR EN MINIS DE</div>
+            <div style={{fontSize:13,color:C.muted,letterSpacing:1,marginBottom:5}}>MOSTRAR EN MINIS DE</div>
             <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
               <button onClick={()=>update(sel.id,"playerId",null)}
                 style={{padding:"3px 8px",background:sel.playerId===null?"rgba(56,189,248,.1)":"transparent",
                   border:`1px solid ${sel.playerId===null?C.blue:C.border}`,borderRadius:2,cursor:"pointer",
-                  color:sel.playerId===null?C.blue:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700}}>
+                  color:sel.playerId===null?C.blue:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:13,fontWeight:700}}>
                 TODOS
               </button>
               {players.map(p=>(
                 <button key={p.id} onClick={()=>update(sel.id,"playerId",p.id)}
                   style={{padding:"3px 8px",background:sel.playerId===p.id?`rgba(${h2rgb(p.color)},.1)`:"transparent",
                     border:`1px solid ${sel.playerId===p.id?p.color:C.border}`,borderRadius:2,cursor:"pointer",
-                    color:sel.playerId===p.id?p.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700}}>
+                    color:sel.playerId===p.id?p.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:13,fontWeight:700}}>
                   {p.name}
                 </button>
               ))}
@@ -1049,11 +1067,11 @@ function OverlayManager({overlays,setOverlays,players}){
           </div>
           {/* Opacidad */}
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:11,color:C.muted,letterSpacing:1,width:52,flexShrink:0}}>OPACIDAD</span>
+            <span style={{fontSize:13,color:C.muted,letterSpacing:1,width:52,flexShrink:0}}>OPACIDAD</span>
             <input type="range" min={10} max={100} step={5} value={sel.opacity}
               onChange={e=>update(sel.id,"opacity",parseFloat(e.target.value))}
               style={{flex:1,accentColor:C.accent,height:3}}/>
-            <span style={{fontSize:11,color:C.text,width:32,textAlign:"right",flexShrink:0}}>{sel.opacity}%</span>
+            <span style={{fontSize:13,color:C.text,width:32,textAlign:"right",flexShrink:0}}>{sel.opacity}%</span>
           </div>
         </div>
       )}
@@ -1062,7 +1080,7 @@ function OverlayManager({overlays,setOverlays,players}){
       <button onClick={()=>fileRef.current?.click()}
         style={{width:"100%",padding:"8px",background:"transparent",
           border:`1px solid ${C.blue}`,borderRadius:2,cursor:"pointer",
-          color:C.blue,fontFamily:"'Rajdhani',monospace",fontSize:11,
+          color:C.blue,fontFamily:"'Rajdhani',monospace",fontSize:13,
           fontWeight:700,letterSpacing:2,transition:"all .2s"}}
         onMouseEnter={e=>e.currentTarget.style.background="rgba(56,189,248,.08)"}
         onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
@@ -1071,14 +1089,14 @@ function OverlayManager({overlays,setOverlays,players}){
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp"
         style={{display:"none"}} onChange={addOverlay}/>
       <div style={{marginTop:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:11,color:C.muted,letterSpacing:1}}>
+        <span style={{fontSize:13,color:C.muted,letterSpacing:1}}>
           PNG, JPG, SVG, WebP · {overlays.length>0?`${overlays.length} guardada${overlays.length>1?"s":""} en local`:"Se guardan automáticamente"}
         </span>
         {overlays.length>0&&(
           <button onClick={()=>{setOverlays([]);localStorage.removeItem('wargame_overlays_v1');setSelId(null);}}
             style={{padding:"2px 7px",background:"transparent",border:`1px solid ${C.border}`,
               borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",
-              fontSize:10,letterSpacing:1}}
+              fontSize:13,letterSpacing:1}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red;e.currentTarget.style.color=C.red;}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
             LIMPIAR TODO
@@ -1114,7 +1132,7 @@ function ArucoGenerator(){
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
         {ARUCO_FACTIONS.map(f=>(
           <button key={f.id} onClick={()=>setSelFaction(f)}
-            style={{padding:"4px 10px",border:`1px solid ${selFaction.id===f.id?f.color:C.border}`,borderRadius:2,cursor:"pointer",background:selFaction.id===f.id?`rgba(${h2rgb(f.color)},.12)`:"transparent",color:selFaction.id===f.id?f.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:12,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
+            style={{padding:"4px 10px",border:`1px solid ${selFaction.id===f.id?f.color:C.border}`,borderRadius:2,cursor:"pointer",background:selFaction.id===f.id?`rgba(${h2rgb(f.color)},.12)`:"transparent",color:selFaction.id===f.id?f.color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:13,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
             {f.name.toUpperCase()}
           </button>
         ))}
@@ -1123,13 +1141,13 @@ function ArucoGenerator(){
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:10}}>
         {[0,1,2,3].map(i=>(
           <div key={i} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,padding:10,textAlign:"center"}}>
-            <div style={{fontSize:11,color:selFaction.color,fontWeight:700,letterSpacing:1,marginBottom:4}}>
+            <div style={{fontSize:13,color:selFaction.color,fontWeight:700,letterSpacing:1,marginBottom:4}}>
               {ARUCO_CORNERS[i]}
             </div>
             <canvas ref={canvasRefs[i]}
               style={{width:100,height:100,display:"block",margin:"0 auto",imageRendering:"pixelated",border:`1px solid ${C.border}`}}/>
             <button onClick={()=>download(i)}
-              style={{marginTop:6,padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}
+              style={{marginTop:6,padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:13,fontWeight:700,letterSpacing:1,transition:"all .2s"}}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.color=C.blue;}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
               ↓ PNG
@@ -1139,14 +1157,14 @@ function ArucoGenerator(){
       </div>
       {/* Descarga todos */}
       <button onClick={downloadAll}
-        style={{width:"100%",padding:"8px",background:"transparent",border:`1px solid ${C.green}`,borderRadius:2,cursor:"pointer",color:C.green,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:2,transition:"all .2s"}}
+        style={{width:"100%",padding:"8px",background:"transparent",border:`1px solid ${C.green}`,borderRadius:2,cursor:"pointer",color:C.green,fontFamily:"'Rajdhani',monospace",fontSize:13,fontWeight:700,letterSpacing:2,transition:"all .2s"}}
         onMouseEnter={e=>e.currentTarget.style.background="rgba(34,197,94,.1)"}
         onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
         ↓ DESCARGAR LOS 4 MARCADORES
       </button>
       {/* Instrucciones */}
       <div style={{marginTop:10,padding:"8px 10px",background:C.bg,borderRadius:2,border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:11,color:C.muted,letterSpacing:1,lineHeight:1.6}}>
+        <div style={{fontSize:13,color:C.muted,letterSpacing:1,lineHeight:1.6}}>
           Imprime a <span style={{color:C.text}}>3×3 cm exactos</span> · Pega en las <span style={{color:C.text}}>4 esquinas del tapete</span> · La cámara cenital los detecta automáticamente como referencia de calibración
         </div>
       </div>
@@ -1158,7 +1176,7 @@ function ArucoGenerator(){
 function StatusBadge({status}){
   const cfg={pending:{label:"PENDIENTE",color:"#3a5a7a",bg:"transparent"},deployed:{label:"EN JUEGO",color:"#22c55e",bg:"rgba(34,197,94,0.1)"},eliminated:{label:"ELIMINADA",color:"#f43f5e",bg:"rgba(244,63,94,0.1)"}};
   const s=cfg[status]||cfg.pending;
-  return <span style={{fontSize:12,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:s.color,background:s.bg,border:`1px solid ${s.color}44`}}>{s.label}</span>;
+  return <span style={{fontSize:13,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:s.color,background:s.bg,border:`1px solid ${s.color}44`}}>{s.label}</span>;
 }
 
 function UnitRow({unit,unitSt,playerColor,onDeploy,onDeployAll,onEliminate,selected,onClick}){
@@ -1183,21 +1201,21 @@ function UnitRow({unit,unitSt,playerColor,onDeploy,onDeployAll,onEliminate,selec
               color:allEliminated?C.muted:playerColor||C.text}}>{unit.name}</span>
             {/* Contador de figuras */}
             {isMulti?(
-              <span style={{fontSize:11,color:C.muted,letterSpacing:1}}>
+              <span style={{fontSize:13,color:C.muted,letterSpacing:1}}>
                 <span style={{color:C.green}}>{st.deployed}</span>
                 <span style={{color:C.muted}}>/{st.total}</span>
                 {st.eliminated>0&&<span style={{color:C.red}}> (-{st.eliminated})</span>}
               </span>
             ):(
-              <span style={{fontSize:11,color:C.muted}}>×1</span>
+              <span style={{fontSize:13,color:C.muted}}>×1</span>
             )}
             {/* Badge de estado */}
-            {allEliminated&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.red,background:"rgba(244,63,94,0.1)",border:"1px solid #f43f5e44"}}>ELIMINADA</span>}
-            {!allEliminated&&allDeployed&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.green,background:"rgba(34,197,94,0.1)",border:"1px solid #22c55e44"}}>EN JUEGO</span>}
-            {!allEliminated&&!allDeployed&&st.deployed>0&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.yellow,background:"rgba(251,191,36,0.1)",border:"1px solid #fbbf2444"}}>PARCIAL</span>}
-            {!allEliminated&&!allDeployed&&st.deployed===0&&<span style={{fontSize:10,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.muted,background:"transparent",border:"1px solid #3a5a7a44"}}>PENDIENTE</span>}
+            {allEliminated&&<span style={{fontSize:13,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.red,background:"rgba(244,63,94,0.1)",border:"1px solid #f43f5e44"}}>ELIMINADA</span>}
+            {!allEliminated&&allDeployed&&<span style={{fontSize:13,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.green,background:"rgba(34,197,94,0.1)",border:"1px solid #22c55e44"}}>EN JUEGO</span>}
+            {!allEliminated&&!allDeployed&&st.deployed>0&&<span style={{fontSize:13,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.yellow,background:"rgba(251,191,36,0.1)",border:"1px solid #fbbf2444"}}>PARCIAL</span>}
+            {!allEliminated&&!allDeployed&&st.deployed===0&&<span style={{fontSize:13,fontWeight:700,letterSpacing:1,padding:"2px 7px",borderRadius:2,color:C.muted,background:"transparent",border:"1px solid #6a9aba44"}}>PENDIENTE</span>}
           </div>
-          <div style={{display:"flex",gap:9,fontSize:11,color:C.muted}}>
+          <div style={{display:"flex",gap:9,fontSize:13,color:C.muted}}>
             <span>M:{unit.stats.M}</span><span>T:{unit.stats.T}</span>
             <span>SV:{unit.stats.SV}</span><span>W:{unit.stats.W}</span>
             {maxRange>0&&<span style={{color:"#38bdf877"}}>AD:{maxRange}"</span>}
@@ -1209,12 +1227,12 @@ function UnitRow({unit,unitSt,playerColor,onDeploy,onDeployAll,onEliminate,selec
             {pending>0&&(
               <div style={{display:"flex",gap:3}}>
                 <button onClick={e=>{e.stopPropagation();onDeploy();}}
-                  className="rb gon" style={{padding:"4px 10px",fontSize:11,whiteSpace:"nowrap"}}>
+                  className="rb gon" style={{padding:"4px 10px",fontSize:13,whiteSpace:"nowrap"}}>
                   {isMulti?`▶ +FIGURA (${pending})`:"▶ DESPLEGAR"}
                 </button>
                 {isMulti&&pending>1&&(
                   <button onClick={e=>{e.stopPropagation();onDeployAll();}}
-                    className="rb gon" style={{padding:"4px 8px",fontSize:11,whiteSpace:"nowrap",opacity:0.8}}
+                    className="rb gon" style={{padding:"4px 8px",fontSize:13,whiteSpace:"nowrap",opacity:0.8}}
                     title={`Desplegar las ${pending} figuras restantes en cuadrícula`}>
                     ▶▶
                   </button>
@@ -1223,13 +1241,13 @@ function UnitRow({unit,unitSt,playerColor,onDeploy,onDeployAll,onEliminate,selec
             )}
             {st.deployed>0&&(
               <button onClick={e=>{e.stopPropagation();onEliminate();}}
-                className="rb ron" style={{padding:"3px 8px",fontSize:11,whiteSpace:"nowrap"}}>
+                className="rb ron" style={{padding:"3px 8px",fontSize:13,whiteSpace:"nowrap"}}>
                 {isMulti?"✕ -FIGURA":"✕ ELIMINAR"}
               </button>
             )}
           </div>
         )}
-        {allEliminated&&<span style={{fontSize:11,color:C.muted,flexShrink:0}}>BAJA</span>}
+        {allEliminated&&<span style={{fontSize:13,color:C.muted,flexShrink:0}}>BAJA</span>}
       </div>
       {selected&&!allEliminated&&(
         <div style={{marginTop:5,display:"flex",flexWrap:"wrap",gap:2}}>
@@ -1255,11 +1273,11 @@ function PatrolSelector({playerId,playerColor,playerName,patrol,patrols,system,m
     <div className="panel fade-in" style={{borderRadius:2,padding:10,borderLeft:`2px solid ${playerColor}`}}>
       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
         <div style={{width:8,height:8,borderRadius:"50%",background:playerColor,boxShadow:`0 0 6px ${playerColor}`}}/>
-        <span style={{fontWeight:700,fontSize:12,color:playerColor,letterSpacing:1}}>{playerName}</span>
-        {patrol&&<span className="tag" style={{color:fc,background:`rgba(${h2rgb(fc)},.1)`,fontSize:11}}>{patrol.faction}</span>}
+        <span style={{fontWeight:700,fontSize:13,color:playerColor,letterSpacing:1}}>{playerName}</span>
+        {patrol&&<span className="tag" style={{color:fc,background:`rgba(${h2rgb(fc)},.1)`,fontSize:13}}>{patrol.faction}</span>}
       </div>
       {available.length===0?(
-        <div style={{fontSize:12,color:C.muted,padding:"6px 0"}}>No hay patrullas para este modo. Importa desde CONFIG.</div>
+        <div style={{fontSize:13,color:C.muted,padding:"6px 0"}}>No hay patrullas para este modo. Importa desde CONFIG.</div>
       ):(
         <div style={{display:"flex",flexDirection:"column",gap:3}}>
           {available.map(p=>{
@@ -1270,10 +1288,10 @@ function PatrolSelector({playerId,playerColor,playerName,patrol,patrols,system,m
                 style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",background:isSel?`rgba(${h2rgb(pfc)},.1)`:"transparent",border:`1px solid ${isSel?pfc:C.border}`,borderRadius:2,cursor:"pointer",fontFamily:"'Rajdhani',monospace",textAlign:"left",transition:"all .2s"}}>
                 <div style={{width:5,height:5,borderRadius:"50%",background:pfc,flexShrink:0}}/>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:11,fontWeight:700,color:isSel?pfc:C.text,letterSpacing:1}}>{p.patrol_name}</div>
-                  <div style={{fontSize:11,color:C.muted}}>{p.faction} · {p.units?.length||0} unidades</div>
+                  <div style={{fontSize:13,fontWeight:700,color:isSel?pfc:C.text,letterSpacing:1}}>{p.patrol_name}</div>
+                  <div style={{fontSize:13,color:C.muted}}>{p.faction} · {p.units?.length||0} unidades</div>
                 </div>
-                {isSel&&<span style={{fontSize:12,color:pfc}}>✓</span>}
+                {isSel&&<span style={{fontSize:13,color:pfc}}>✓</span>}
               </button>
             );
           })}
@@ -1292,7 +1310,7 @@ class ErrorBoundary extends React.Component {
   render(){
     if(this.state.error){
       return(
-        <div style={{background:"#050d1a",color:"#f43f5e",padding:24,fontFamily:"monospace",fontSize:12,minHeight:"100vh"}}>
+        <div style={{background:"#050d1a",color:"#f43f5e",padding:24,fontFamily:"monospace",fontSize:13,minHeight:"100vh"}}>
           <div style={{marginBottom:12,fontSize:14,fontWeight:700}}>ERROR DE RENDER</div>
           <div style={{background:"#0a0a0a",padding:12,borderRadius:4,whiteSpace:"pre-wrap",lineHeight:1.6}}>
             {this.state.error?.message}
@@ -1463,8 +1481,8 @@ function CameraCalibration(){
 
   return(
     <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
-      <div style={{color:C.accent,fontSize:12,letterSpacing:2,marginBottom:10}}>CALIBRACIÓN DE CÁMARA</div>
-      <div style={{fontSize:12,color:C.muted,lineHeight:1.5,marginBottom:10}}>
+      <div style={{color:C.accent,fontSize:13,letterSpacing:2,marginBottom:10}}>CALIBRACIÓN DE CÁMARA</div>
+      <div style={{fontSize:13,color:C.muted,lineHeight:1.5,marginBottom:10}}>
         Sin impresora. Apunta la cámara al tapete, haz click en las 4 esquinas y arrastra para ajustar.
       </div>
 
@@ -1473,10 +1491,10 @@ function CameraCalibration(){
         <div style={{background:'rgba(34,197,94,0.08)',border:'1px solid #22c55e44',borderRadius:2,
           padding:8,marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div>
-            <div style={{fontSize:11,color:C.green,fontWeight:700,letterSpacing:1}}>✓ CALIBRADO</div>
-            <div style={{fontSize:11,color:C.muted}}>{savedCalib.date} · {savedCalib.camW}×{savedCalib.camH}px</div>
+            <div style={{fontSize:13,color:C.green,fontWeight:700,letterSpacing:1}}>✓ CALIBRADO</div>
+            <div style={{fontSize:13,color:C.muted}}>{savedCalib.date} · {savedCalib.camW}×{savedCalib.camH}px</div>
           </div>
-          <button onClick={clearCalibration} className="rb" style={{padding:'2px 8px',fontSize:11,color:C.red,borderColor:C.red}}>BORRAR</button>
+          <button onClick={clearCalibration} className="rb" style={{padding:'2px 8px',fontSize:13,color:C.red,borderColor:C.red}}>BORRAR</button>
         </div>
       )}
 
@@ -1496,7 +1514,7 @@ function CameraCalibration(){
               style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',
                 cursor:points.length<4?'crosshair':'default',zIndex:1}}/>
             <div style={{position:'absolute',top:8,left:8,background:'rgba(5,13,26,0.85)',
-              padding:'4px 10px',borderRadius:2,fontSize:11,color:C.accent,fontWeight:700,
+              padding:'4px 10px',borderRadius:2,fontSize:13,color:C.accent,fontWeight:700,
               letterSpacing:1,zIndex:2,pointerEvents:'none'}}>
               {points.length<4
                 ?`${points.length+1}/4 — Click en esquina ${CALIB_CORNERS[points.length]}`
@@ -1505,16 +1523,16 @@ function CameraCalibration(){
           </div>
           <div style={{display:'flex',gap:6,marginTop:6}}>
             <button onClick={()=>setPoints(prev=>prev.slice(0,-1))} disabled={!points.length}
-              className="rb" style={{padding:'4px 10px',fontSize:11,opacity:points.length?1:0.4}}>↩ DESHACER</button>
+              className="rb" style={{padding:'4px 10px',fontSize:13,opacity:points.length?1:0.4}}>↩ DESHACER</button>
             <button onClick={saveCalibration} disabled={points.length!==4} className="rb"
-              style={{padding:'4px 14px',fontSize:11,flex:1,
+              style={{padding:'4px 14px',fontSize:13,flex:1,
                 borderColor:points.length===4?C.green:C.border,
                 color:points.length===4?C.green:C.muted,
                 background:points.length===4?'rgba(34,197,94,0.08)':'transparent'}}>
               {points.length===4?'✓ GUARDAR CALIBRACIÓN':`Marca ${4-points.length} esquina${4-points.length!==1?'s':''} más`}
             </button>
             <button onClick={stopCamera} className="rb"
-              style={{padding:'4px 10px',fontSize:11,color:C.red,borderColor:C.red}}>✕</button>
+              style={{padding:'4px 10px',fontSize:13,color:C.red,borderColor:C.red}}>✕</button>
           </div>
         </div>
       )}
@@ -1523,10 +1541,10 @@ function CameraCalibration(){
         <div style={{marginTop:8}}>
           {cameras.length>1&&(
             <div style={{marginBottom:8}}>
-              <div style={{fontSize:11,color:C.muted,letterSpacing:1,marginBottom:5}}>CÁMARA</div>
+              <div style={{fontSize:13,color:C.muted,letterSpacing:1,marginBottom:5}}>CÁMARA</div>
               <select value={selCamId} onChange={e=>setSelCamId(e.target.value)}
                 style={{width:'100%',background:C.bg,border:`1px solid ${C.border}`,borderRadius:2,
-                  color:C.text,fontFamily:"'Rajdhani',monospace",fontSize:12,padding:'5px 8px',cursor:'pointer'}}>
+                  color:C.text,fontFamily:"'Rajdhani',monospace",fontSize:13,padding:'5px 8px',cursor:'pointer'}}>
                 {cameras.map((c,i)=>(
                   <option key={c.deviceId} value={c.deviceId}>
                     {c.label||`Cámara ${i+1}`}
@@ -1538,7 +1556,7 @@ function CameraCalibration(){
           <button onClick={startCamera}
             style={{width:'100%',padding:'9px',background:'transparent',
               border:`1px solid ${C.blue}`,borderRadius:2,cursor:'pointer',
-              color:C.blue,fontFamily:"'Rajdhani',monospace",fontSize:11,
+              color:C.blue,fontFamily:"'Rajdhani',monospace",fontSize:13,
               fontWeight:700,letterSpacing:2,transition:'all .2s'}}
             onMouseEnter={e=>e.currentTarget.style.background='rgba(56,189,248,.08)'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
@@ -1548,7 +1566,7 @@ function CameraCalibration(){
       )}
 
       {savedCalib&&(
-        <div style={{marginTop:8,fontSize:11,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>
+        <div style={{marginTop:8,fontSize:13,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>
           {savedCalib.points.map((p,i)=>
             `${i+1}:(${(p.x*100).toFixed(0)}%,${(p.y*100).toFixed(0)}%)`
           ).join(' · ')}
@@ -2229,7 +2247,7 @@ function App(){
             style={{position:"fixed",bottom:16,right:16,padding:"6px 12px",
               background:"rgba(5,13,26,0.7)",border:`1px solid ${C.border}`,
               borderRadius:2,cursor:"pointer",color:C.muted,fontFamily:"'Rajdhani',monospace",
-              fontSize:11,letterSpacing:1,opacity:0.4,transition:"opacity .3s",zIndex:10000}}
+              fontSize:13,letterSpacing:1,opacity:0.4,transition:"opacity .3s",zIndex:10000}}
             onMouseEnter={e=>e.currentTarget.style.opacity=1}
             onMouseLeave={e=>e.currentTarget.style.opacity=0.4}>
             ESC / SALIR
@@ -2244,18 +2262,18 @@ function App(){
           <div style={{width:7,height:7,borderRadius:"50%",background:C.accent,boxShadow:`0 0 7px ${C.accent}`}} className="pulse"/>
           <span style={{fontWeight:700,fontSize:15,letterSpacing:3,color:C.accent}}>WARGAME</span>
           <span style={{fontWeight:400,fontSize:15,letterSpacing:3,color:C.text}}>VISION SYS</span>
-          <span style={{color:C.muted,fontSize:11,letterSpacing:1}}>// v3.0</span>
+          <span style={{color:C.muted,fontSize:13,letterSpacing:1}}>// v3.0</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{display:"flex",gap:4}}>
             {Object.entries(GAME_SYSTEMS).map(([key,sys])=>(
               <button key={key} onClick={()=>changeSystem(key)} className={`rb ${activeSystem===key?"bon":""}`}
-                style={{padding:"3px 9px",fontSize:12,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
+                style={{padding:"3px 9px",fontSize:13,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
                 {sys.short}
               </button>
             ))}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:C.muted,letterSpacing:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:5,fontSize:13,color:C.muted,letterSpacing:1}}>
             <span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block",boxShadow:`0 0 6px ${C.green}`}}/>
             PROTOTIPO
           </div>
@@ -2266,10 +2284,10 @@ function App(){
       <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.panel}}>
         {TABS.map((t,i)=>(
           <button key={t} className={`rb ${tab===t?"on":""}`} onClick={()=>setTab(t)}
-            style={{padding:"9px 18px",borderRadius:0,fontSize:11,letterSpacing:2,borderLeft:i>0?`1px solid ${C.border}`:"none",borderTop:"none",borderRight:"none",borderBottom:tab===t?`2px solid ${C.accent}`:"2px solid transparent"}}>
+            style={{padding:"9px 18px",borderRadius:0,fontSize:13,letterSpacing:2,borderLeft:i>0?`1px solid ${C.border}`:"none",borderTop:"none",borderRight:"none",borderBottom:tab===t?`2px solid ${C.accent}`:"2px solid transparent"}}>
             {t}
             {t==="JUEGO"&&Object.keys(playerPatrols).length>0&&(
-              <span style={{marginLeft:5,fontSize:11,color:C.green,background:"rgba(34,197,94,.1)",padding:"1px 5px",borderRadius:2}}>{Object.keys(playerPatrols).length}</span>
+              <span style={{marginLeft:5,fontSize:13,color:C.green,background:"rgba(34,197,94,.1)",padding:"1px 5px",borderRadius:2}}>{Object.keys(playerPatrols).length}</span>
             )}
           </button>
         ))}
@@ -2284,14 +2302,14 @@ function App(){
                 const color=key==="engage"?(auraColors.engage||defaultColor):auraColors[key]||C.green;
                 const [r,g,b]=h2p(color);
                 return(<button key={key} onClick={()=>setActiveAuras(prev=>({...prev,[key]:!prev[key]}))}
-                  style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:2,cursor:"pointer",border:`1px solid ${activeAuras[key]?color:C.border}`,background:activeAuras[key]?`rgba(${r},${g},${b},.1)`:"transparent",color:activeAuras[key]?color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
+                  style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:2,cursor:"pointer",border:`1px solid ${activeAuras[key]?color:C.border}`,background:activeAuras[key]?`rgba(${r},${g},${b},.1)`:"transparent",color:activeAuras[key]?color:C.muted,fontFamily:"'Rajdhani',monospace",fontSize:13,fontWeight:700,letterSpacing:1,transition:"all .2s"}}>
                   <div style={{width:5,height:5,borderRadius:"50%",background:activeAuras[key]?color:C.muted}}/>{label}
                 </button>);
               })}
-              <button onClick={()=>setShowLegend(true)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:C.blue,color:C.blue}}>? ÍNDICE</button>
+              <button onClick={()=>setShowLegend(true)} className="rb" style={{padding:"3px 8px",fontSize:13,borderColor:C.blue,color:C.blue}}>? ÍNDICE</button>
               {/* Botón cámara */}
               <button onClick={toggleCam} className="rb"
-                style={{padding:"3px 9px",fontSize:11,
+                style={{padding:"3px 9px",fontSize:13,
                   borderColor:camActive?C.green:C.border,
                   color:camActive?C.green:C.muted,
                   background:camActive?"rgba(34,197,94,0.08)":"transparent"}}>
@@ -2313,7 +2331,7 @@ function App(){
                 const anyOn=Object.values(activeAuras).some(Boolean);
                 if(anyOn){prevAuras.current={...activeAuras};setActiveAuras({move:false,charge:false,shoot:false,abilities:false});}
                 else setActiveAuras({...prevAuras.current});
-              }} className="rb" style={{padding:"3px 10px",fontSize:11,
+              }} className="rb" style={{padding:"3px 10px",fontSize:13,
                 borderColor:Object.values(activeAuras).some(Boolean)?"#f43f5e44":C.green,
                 color:Object.values(activeAuras).some(Boolean)?"#f43f5e":C.green,
                 background:Object.values(activeAuras).some(Boolean)?"rgba(244,63,94,0.05)":"rgba(34,197,94,0.05)"}}>
@@ -2321,26 +2339,26 @@ function App(){
               </button>
               {/* Toggle modo relleno / solo borde */}
               <button onClick={()=>setAuraFillMode(m=>m==="fill"?"border":"fill")}
-                className="rb" style={{padding:"3px 10px",fontSize:11,
+                className="rb" style={{padding:"3px 10px",fontSize:13,
                   borderColor:auraFillMode==="border"?C.yellow:C.border,
                   color:auraFillMode==="border"?C.yellow:C.muted,
                   background:auraFillMode==="border"?"rgba(251,191,36,0.06)":"transparent"}}>
                 {auraFillMode==="border"?"◻ CONTORNO":"◼ RELLENO"}
               </button>
               <div style={{position:"relative"}} onClick={e=>e.stopPropagation()}>
-                <button onClick={()=>setShowDeployMenu(v=>!v)} className="rb" style={{padding:"3px 8px",fontSize:11,borderColor:activeZone?C.green:C.border,color:activeZone?C.green:C.muted,background:activeZone?"rgba(34,197,94,.1)":"transparent"}}>
+                <button onClick={()=>setShowDeployMenu(v=>!v)} className="rb" style={{padding:"3px 8px",fontSize:13,borderColor:activeZone?C.green:C.border,color:activeZone?C.green:C.muted,background:activeZone?"rgba(34,197,94,.1)":"transparent"}}>
                   ⬡ DESPLIEGUE{activeZone?` — ${DEPLOY_ZONES[activeZone].label}`:""}
                 </button>
                 {showDeployMenu&&(
                   <div style={{position:"absolute",top:"110%",left:0,zIndex:20,background:C.panel,border:`1px solid ${C.border}`,borderRadius:2,padding:8,minWidth:240,boxShadow:"0 0 20px rgba(0,0,0,0.5)"}}>
-                    <div style={{fontSize:12,color:C.muted,letterSpacing:2,marginBottom:8}}>ZONA DE DESPLIEGUE</div>
+                    <div style={{fontSize:13,color:C.muted,letterSpacing:2,marginBottom:8}}>ZONA DE DESPLIEGUE</div>
                     {Object.entries(DEPLOY_ZONES).map(([key,{label,desc}])=>(
                       <button key={key} onClick={()=>{setActiveZone(activeZone===key?null:key);setShowDeployMenu(false);}}
-                        style={{display:"block",width:"100%",textAlign:"left",padding:"6px 8px",background:activeZone===key?"rgba(34,197,94,.12)":"transparent",border:"none",borderRadius:2,cursor:"pointer",marginBottom:2,color:activeZone===key?C.green:C.text,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>
-                        <div>{label}</div><div style={{fontSize:12,color:C.muted,fontWeight:400}}>{desc}</div>
+                        style={{display:"block",width:"100%",textAlign:"left",padding:"6px 8px",background:activeZone===key?"rgba(34,197,94,.12)":"transparent",border:"none",borderRadius:2,cursor:"pointer",marginBottom:2,color:activeZone===key?C.green:C.text,fontFamily:"'Rajdhani',monospace",fontSize:13,fontWeight:600,letterSpacing:1}}>
+                        <div>{label}</div><div style={{fontSize:13,color:C.muted,fontWeight:400}}>{desc}</div>
                       </button>
                     ))}
-                    {activeZone&&<button onClick={()=>{setActiveZone(null);setShowDeployMenu(false);}} style={{display:"block",width:"100%",padding:"5px 8px",marginTop:4,background:"transparent",border:`1px solid ${C.red}`,borderRadius:2,cursor:"pointer",color:C.red,fontFamily:"'Rajdhani',monospace",fontSize:11,fontWeight:600,letterSpacing:1}}>✕ OCULTAR ZONA</button>}
+                    {activeZone&&<button onClick={()=>{setActiveZone(null);setShowDeployMenu(false);}} style={{display:"block",width:"100%",padding:"5px 8px",marginTop:4,background:"transparent",border:`1px solid ${C.red}`,borderRadius:2,cursor:"pointer",color:C.red,fontFamily:"'Rajdhani',monospace",fontSize:13,fontWeight:600,letterSpacing:1}}>✕ OCULTAR ZONA</button>}
                   </div>
                 )}
               </div>
@@ -2350,17 +2368,17 @@ function App(){
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
               marginBottom:4,padding:"3px 6px",background:"rgba(7,15,32,0.8)",
               borderRadius:2,border:`1px solid ${C.border}`}}>
-              <span style={{fontSize:11,color:C.muted,letterSpacing:1,fontFamily:"'Share Tech Mono',monospace"}}>
+              <span style={{fontSize:13,color:C.muted,letterSpacing:1,fontFamily:"'Share Tech Mono',monospace"}}>
                 {modeInfo.w}" × {modeInfo.h}"
                 <span style={{color:C.border,margin:"0 6px"}}>·</span>
                 <span style={{color:C.muted}}>{(modeInfo.w*2.54).toFixed(0)}cm × {(modeInfo.h*2.54).toFixed(0)}cm</span>
               </span>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 {zoom!==1&&<>
-                  <span style={{fontSize:11,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>
+                  <span style={{fontSize:13,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>
                     {Math.round(zoom*100)}%
                   </span>
-                  <button onClick={resetZoom} className="rb" style={{padding:"1px 7px",fontSize:11}}>↺</button>
+                  <button onClick={resetZoom} className="rb" style={{padding:"1px 7px",fontSize:13}}>↺</button>
                 </>}
               </div>
             </div>
@@ -2379,54 +2397,54 @@ function App(){
                   cursor:isDraggingGroup.current?"grabbing":isDraggingMini.current?"grabbing":selMinis.size>0?"grab":selMini?"crosshair":isPanning.current?"grabbing":"crosshair"}}/>
               {assignMenu&&(
                 <div style={{position:"absolute",left:assignMenu.x+10,top:assignMenu.y-10,background:C.panel,border:`1px solid ${C.accent}`,borderRadius:2,padding:7,zIndex:10,minWidth:170,boxShadow:"0 0 18px rgba(249,115,22,0.18)"}}>
-                  <div style={{fontSize:12,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
+                  <div style={{fontSize:13,color:C.muted,letterSpacing:1,marginBottom:7}}>ASIGNAR JUGADOR</div>
                   {players.map(p=>(
                     <button key={p.id} onClick={()=>{setMinis(prev=>prev.map(m=>m.id===assignMenu.miniId?{...m,playerId:p.id}:m));setAssignMenu(null);setSelMini(null);}}
-                      style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"5px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.text,fontSize:12,fontFamily:"'Rajdhani',monospace",fontWeight:600,letterSpacing:1}}
+                      style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"5px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.text,fontSize:13,fontFamily:"'Rajdhani',monospace",fontWeight:600,letterSpacing:1}}
                       onMouseEnter={e=>e.currentTarget.style.background="rgba(249,115,22,0.18)"}
                       onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                       <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>{p.name}
                     </button>
                   ))}
                   <div style={{borderTop:`1px solid ${C.border}`,margin:"3px 0"}}/>
-                  <button onClick={()=>removeMiniById(assignMenu.miniId)} style={{width:"100%",padding:"4px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.red,fontSize:11,fontFamily:"'Rajdhani',monospace",letterSpacing:1,textAlign:"left"}}>✕ ELIMINAR DEL TABLERO</button>
+                  <button onClick={()=>removeMiniById(assignMenu.miniId)} style={{width:"100%",padding:"4px 7px",background:"transparent",border:"none",cursor:"pointer",color:C.red,fontSize:13,fontFamily:"'Rajdhani',monospace",letterSpacing:1,textAlign:"left"}}>✕ ELIMINAR DEL TABLERO</button>
                 </div>
               )}
             </div>
             <div style={{marginTop:8,display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
               {players.map(p=>{const s=gameStats[p.id]||{};return(
-                <div key={p.id} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,letterSpacing:1}}>
+                <div key={p.id} style={{display:"flex",alignItems:"center",gap:6,fontSize:13,letterSpacing:1}}>
                   <span style={{width:7,height:7,borderRadius:"50%",background:p.color,boxShadow:`0 0 5px ${p.color}`}}/>
                   <span style={{color:p.color,fontWeight:600}}>{p.name}</span>
                   <span style={{color:C.muted}}>{s.deployed||0} en juego{s.eliminated>0?` · ${s.eliminated} bajas`:""}{s.pending>0?` · ${s.pending} pend.`:""}</span>
                 </div>
               );})}
-              {minis.length===0&&<span style={{fontSize:12,color:C.muted}}>Ve a JUEGO para seleccionar patrullas y desplegar unidades</span>}
+              {minis.length===0&&<span style={{fontSize:13,color:C.muted}}>Ve a JUEGO para seleccionar patrullas y desplegar unidades</span>}
             </div>
           </div>
           <div style={{width:190,flexShrink:0}}>
             <div className="panel" style={{borderRadius:2,padding:10,marginBottom:8}}>
-              <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:6}}>MODO ACTIVO</div>
-              <div style={{fontSize:11,fontWeight:700,color:sysInfo.color,letterSpacing:1}}>{sysInfo.short}</div>
-              <div style={{fontSize:12,color:C.text}}>{modeInfo.label}</div>
-              <div style={{fontSize:11,color:C.muted,marginTop:2}}>{modeInfo.w}" × {modeInfo.h}"</div>
+              <div style={{color:C.muted,fontSize:13,letterSpacing:2,marginBottom:6}}>MODO ACTIVO</div>
+              <div style={{fontSize:13,fontWeight:700,color:sysInfo.color,letterSpacing:1}}>{sysInfo.short}</div>
+              <div style={{fontSize:13,color:C.text}}>{modeInfo.label}</div>
+              <div style={{fontSize:13,color:C.muted,marginTop:2}}>{modeInfo.w}" × {modeInfo.h}"</div>
             </div>
             {players.map(p=>{const patrol=playerPatrols[p.id];const s=gameStats[p.id]||{};const fc=patrol?(FACTION_COLORS[patrol.faction_keyword]||C.blue):C.muted;return(
               <div key={p.id} className="panel" style={{borderRadius:2,padding:10,marginBottom:6,borderLeft:`2px solid ${p.color}`}}>
                 <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:5}}>
                   <div style={{width:6,height:6,borderRadius:"50%",background:p.color}}/>
-                  <span style={{fontSize:11,fontWeight:700,color:p.color,letterSpacing:1}}>{p.name}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:p.color,letterSpacing:1}}>{p.name}</span>
                 </div>
                 {patrol?(
                   <>
-                    <div style={{fontSize:12,color:fc,marginBottom:4}}>{patrol.patrol_name}</div>
+                    <div style={{fontSize:13,color:fc,marginBottom:4}}>{patrol.patrol_name}</div>
                     <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                      {s.deployed>0&&<span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:11}}>{s.deployed} en juego</span>}
-                      {s.pending>0&&<span className="tag" style={{color:C.muted,background:C.bg,fontSize:11}}>{s.pending} pend.</span>}
-                      {s.eliminated>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:11}}>{s.eliminated} bajas</span>}
+                      {s.deployed>0&&<span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:13}}>{s.deployed} en juego</span>}
+                      {s.pending>0&&<span className="tag" style={{color:C.muted,background:C.bg,fontSize:13}}>{s.pending} pend.</span>}
+                      {s.eliminated>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:13}}>{s.eliminated} bajas</span>}
                     </div>
                   </>
-                ):<div style={{fontSize:12,color:C.muted}}>Sin patrulla.</div>}
+                ):<div style={{fontSize:13,color:C.muted}}>Sin patrulla.</div>}
               </div>
             );})}
           </div>
@@ -2436,7 +2454,7 @@ function App(){
       {/* ══ JUGADORES ══ */}
       {tab==="JUGADORES"&&(
         <div style={{padding:16,maxWidth:440}}>
-          <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:14}}>// REGISTRO DE JUGADORES</div>
+          <div style={{color:C.muted,fontSize:13,letterSpacing:2,marginBottom:14}}>// REGISTRO DE JUGADORES</div>
           {players.map(p=>(
             <div key={p.id} className="panel" style={{borderRadius:2,padding:12,marginBottom:8,
               display:"flex",alignItems:"center",gap:12,borderLeft:`3px solid ${p.color}`}}>
@@ -2451,18 +2469,18 @@ function App(){
                   style={{position:"absolute",opacity:0,width:0,height:0,top:0,left:0}}/>
               </div>
               <span style={{flex:1,fontWeight:700,letterSpacing:1,color:p.color,fontSize:15}}>{p.name}</span>
-              <span className="tag" style={{color:p.color,background:`rgba(${h2rgb(p.color)},.1)`,fontSize:12}}>
+              <span className="tag" style={{color:p.color,background:`rgba(${h2rgb(p.color)},.1)`,fontSize:13}}>
                 {minis.filter(m=>m.playerId===p.id).length} MINIS
               </span>
               <button onClick={()=>setPlayers(prev=>prev.filter(x=>x.id!==p.id))}
-                className="rb" style={{padding:"3px 9px",fontSize:12}}>✕</button>
+                className="rb" style={{padding:"3px 9px",fontSize:13}}>✕</button>
             </div>
           ))}
           <button onClick={()=>setPlayers(prev=>{
             const id=Math.max(0,...prev.map(p=>p.id))+1;
             return[...prev,{id,name:`JUGADOR ${["I","II","III","IV","V","VI"][id-1]||id}`,
               color:PLAYER_COLORS[(id-1)%PLAYER_COLORS.length]}];
-          })} className="rb" style={{width:"100%",padding:"10px",fontSize:12,letterSpacing:2,marginTop:4}}>
+          })} className="rb" style={{width:"100%",padding:"10px",fontSize:13,letterSpacing:2,marginTop:4}}>
             + AÑADIR JUGADOR
           </button>
         </div>
@@ -2475,28 +2493,28 @@ function App(){
           <div className="panel" style={{borderRadius:2,padding:12,marginBottom:12}}>
             <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
               <div>
-                <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:6}}>SISTEMA DE JUEGO</div>
+                <div style={{color:C.muted,fontSize:13,letterSpacing:2,marginBottom:6}}>SISTEMA DE JUEGO</div>
                 <div style={{display:"flex",gap:4}}>
                   {Object.entries(GAME_SYSTEMS).map(([key,sys])=>(
                     <button key={key} onClick={()=>changeSystem(key)} className={`rb ${activeSystem===key?"bon":""}`}
-                      style={{padding:"5px 12px",fontSize:11,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
+                      style={{padding:"5px 12px",fontSize:13,letterSpacing:1,borderColor:activeSystem===key?sys.color:C.border,color:activeSystem===key?sys.color:C.muted}}>
                       {sys.label}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:6}}>MODO DE JUEGO</div>
+                <div style={{color:C.muted,fontSize:13,letterSpacing:2,marginBottom:6}}>MODO DE JUEGO</div>
                 <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                   {Object.entries(sysInfo.modes).map(([key,m])=>(
-                    <button key={key} onClick={()=>changeMode(key)} className={`rb ${activeMode===key?"on":""}`} style={{padding:"5px 12px",fontSize:11,letterSpacing:1}}>{m.label}</button>
+                    <button key={key} onClick={()=>changeMode(key)} className={`rb ${activeMode===key?"on":""}`} style={{padding:"5px 12px",fontSize:13,letterSpacing:1}}>{m.label}</button>
                   ))}
                 </div>
               </div>
               <div style={{marginLeft:"auto",textAlign:"right"}}>
-                <div style={{fontSize:12,color:C.muted,marginBottom:2}}>TABLERO</div>
+                <div style={{fontSize:13,color:C.muted,marginBottom:2}}>TABLERO</div>
                 <div style={{fontSize:14,fontWeight:700,color:sysInfo.color}}>{modeInfo.w}" × {modeInfo.h}"</div>
-                <div style={{fontSize:12,color:C.muted}}>{modeInfo.maxRounds} rondas</div>
+                <div style={{fontSize:13,color:C.muted}}>{modeInfo.maxRounds} rondas</div>
               </div>
             </div>
           </div>
@@ -2522,17 +2540,17 @@ function App(){
                   <div key={p.id}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 10px",background:C.panel,borderRadius:2,borderLeft:`3px solid ${p.color}`}}>
                       <div style={{flex:1}}>
-                        <div style={{fontSize:12,fontWeight:700,color:p.color,letterSpacing:1}}>{p.name}</div>
-                        <div style={{fontSize:11,color:fc}}>{patrol.patrol_name}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:p.color,letterSpacing:1}}>{p.name}</div>
+                        <div style={{fontSize:13,color:fc}}>{patrol.patrol_name}</div>
                       </div>
                       <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                        <span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:11}}>{stats.deployed||0} en juego</span>
-                        <span className="tag" style={{color:C.muted,background:C.bg,fontSize:11}}>{stats.pending||0} pend.</span>
-                        {(stats.eliminated||0)>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:11}}>{stats.eliminated} bajas</span>}
+                        <span className="tag" style={{color:C.green,background:"rgba(34,197,94,.1)",fontSize:13}}>{stats.deployed||0} en juego</span>
+                        <span className="tag" style={{color:C.muted,background:C.bg,fontSize:13}}>{stats.pending||0} pend.</span>
+                        {(stats.eliminated||0)>0&&<span className="tag" style={{color:C.red,background:"rgba(244,63,94,.1)",fontSize:13}}>{stats.eliminated} bajas</span>}
                       </div>
                     </div>
                     {patrol.faction_ability&&(
-                      <div style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:6,borderLeft:`2px solid ${fc}44`,fontSize:12,color:C.muted}}>
+                      <div style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:6,borderLeft:`2px solid ${fc}44`,fontSize:13,color:C.muted}}>
                         <span style={{color:fc,fontWeight:700,marginRight:5}}>{patrol.faction_ability.name}</span>
                         {patrol.faction_ability.description}
                       </div>
@@ -2555,14 +2573,14 @@ function App(){
                     </div>
                     {patrol.stratagems?.length>0&&(
                       <div style={{marginTop:8}}>
-                        <div style={{fontSize:12,color:C.muted,letterSpacing:2,marginBottom:5}}>ESTRATAGEMAS</div>
+                        <div style={{fontSize:13,color:C.muted,letterSpacing:2,marginBottom:5}}>ESTRATAGEMAS</div>
                         {patrol.stratagems.map(s=>(
                           <div key={s.name} style={{padding:"5px 8px",background:C.panel,borderRadius:2,marginBottom:3,borderLeft:"2px solid #38bdf844"}}>
                             <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
-                              <span style={{fontSize:12,fontWeight:700,color:C.blue}}>{s.name}</span>
+                              <span style={{fontSize:13,fontWeight:700,color:C.blue}}>{s.name}</span>
                               <span className="tag" style={{color:C.blue,background:"rgba(56,189,248,.1)",fontSize:8}}>{s.cost_cp}CP</span>
                             </div>
-                            <div style={{fontSize:11,color:C.muted,lineHeight:1.3}}>{s.effect}</div>
+                            <div style={{fontSize:13,color:C.muted,lineHeight:1.3}}>{s.effect}</div>
                           </div>
                         ))}
                       </div>
@@ -2573,7 +2591,7 @@ function App(){
             </div>
           )}
           {Object.keys(playerPatrols).length===0&&(
-            <div style={{padding:"40px 20px",textAlign:"center",color:C.muted,fontSize:11,letterSpacing:1}}>
+            <div style={{padding:"40px 20px",textAlign:"center",color:C.muted,fontSize:13,letterSpacing:1}}>
               Selecciona un modo de juego y elige la patrulla de cada jugador para comenzar
             </div>
           )}
@@ -2583,12 +2601,12 @@ function App(){
       {/* ══ CONFIG ══ */}
       {tab==="CONFIG"&&(
         <div style={{padding:14,maxWidth:560}}>
-          <div style={{color:C.muted,fontSize:12,letterSpacing:2,marginBottom:14}}>// CONFIGURACIÓN</div>
+          <div style={{color:C.muted,fontSize:13,letterSpacing:2,marginBottom:14}}>// CONFIGURACIÓN</div>
           {/* Calibración de cámara */}
           <CameraCalibration/>
           {/* Panel colores de auras */}
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
-            <div style={{color:C.accent,fontSize:12,letterSpacing:2,marginBottom:10}}>COLORES DE AURAS</div>
+            <div style={{color:C.accent,fontSize:13,letterSpacing:2,marginBottom:10}}>COLORES DE AURAS</div>
             {[
               {key:"move",    label:"Movimiento (M)"},
               {key:"charge",  label:"Carga (C)"},
@@ -2607,56 +2625,56 @@ function App(){
                     style={{position:"absolute",opacity:0,width:0,height:0,top:0,left:0}}/>
                 </div>
                 <span style={{flex:1,fontSize:13,color:auraColors[key],fontWeight:700,letterSpacing:1}}>{label}</span>
-                <span style={{fontSize:11,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>{auraColors[key]}</span>
+                <span style={{fontSize:13,color:C.muted,fontFamily:"'Share Tech Mono',monospace"}}>{auraColors[key]}</span>
                 <button onClick={()=>{
                   const defaults={move:"#22c55e",charge:"#a855f7",shoot:"#38bdf8",abilities:"#fbbf24",engage:"#f43f5e"};
                   setAuraColors(prev=>({...prev,[key]:defaults[key]}));
-                }} className="rb" style={{padding:"2px 7px",fontSize:12}}>↺</button>
+                }} className="rb" style={{padding:"2px 7px",fontSize:13}}>↺</button>
               </div>
             ))}
           </div>
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
-            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>ANTHROPIC API KEY</div>
-            <div style={{fontSize:12,color:C.muted,marginBottom:8,lineHeight:1.4}}>Necesaria para importar Combat Patrols desde PDF. Solo se guarda en memoria.</div>
+            <div style={{color:C.accent,fontSize:13,letterSpacing:2,marginBottom:8}}>ANTHROPIC API KEY</div>
+            <div style={{fontSize:13,color:C.muted,marginBottom:8,lineHeight:1.4}}>Necesaria para importar Combat Patrols desde PDF. Solo se guarda en memoria.</div>
             <div style={{display:"flex",gap:6}}>
               <input type={showApiKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..."
-                style={{flex:1,background:C.bg,border:`1px solid ${apiKey?C.green:C.border}`,borderRadius:2,padding:"6px 10px",color:C.text,fontFamily:"'Share Tech Mono',monospace",fontSize:12,outline:"none"}}/>
-              <button className="rb" onClick={()=>setShowApiKey(v=>!v)} style={{padding:"6px 10px",fontSize:11}}>{showApiKey?"OCULTAR":"VER"}</button>
+                style={{flex:1,background:C.bg,border:`1px solid ${apiKey?C.green:C.border}`,borderRadius:2,padding:"6px 10px",color:C.text,fontFamily:"'Share Tech Mono',monospace",fontSize:13,outline:"none"}}/>
+              <button className="rb" onClick={()=>setShowApiKey(v=>!v)} style={{padding:"6px 10px",fontSize:13}}>{showApiKey?"OCULTAR":"VER"}</button>
             </div>
-            {apiKey&&<div style={{marginTop:5,fontSize:12,color:C.green}}>✓ API key configurada</div>}
+            {apiKey&&<div style={{marginTop:5,fontSize:13,color:C.green}}>✓ API key configurada</div>}
           </div>
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
-            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>IMPORTAR COMBAT PATROL (PDF)</div>
-            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.4}}>Sube el PDF oficial de una Combat Patrol. Claude extraerá automáticamente unidades, armas, habilidades y estratagemas.</div>
+            <div style={{color:C.accent,fontSize:13,letterSpacing:2,marginBottom:8}}>IMPORTAR COMBAT PATROL (PDF)</div>
+            <div style={{fontSize:13,color:C.muted,marginBottom:10,lineHeight:1.4}}>Sube el PDF oficial de una Combat Patrol. Claude extraerá automáticamente unidades, armas, habilidades y estratagemas.</div>
             <div className={`drop-zone ${dragOver?"drag-over":""}`} onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} onDrop={handleDrop} onClick={()=>fileRef.current?.click()}>
-              {pdfLoading?(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}><div className="spin" style={{fontSize:22}}>⟳</div><div style={{fontSize:11,color:C.blue}}>Procesando con Claude...</div></div>):(<div><div style={{fontSize:18,marginBottom:5}}>📄</div><div style={{fontSize:11,color:C.muted}}>Arrastra un PDF o haz clic para seleccionar</div></div>)}
+              {pdfLoading?(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}><div className="spin" style={{fontSize:22}}>⟳</div><div style={{fontSize:13,color:C.blue}}>Procesando con Claude...</div></div>):(<div><div style={{fontSize:18,marginBottom:5}}>📄</div><div style={{fontSize:13,color:C.muted}}>Arrastra un PDF o haz clic para seleccionar</div></div>)}
             </div>
             <input ref={fileRef} type="file" accept="application/pdf" onChange={handleFileInput}/>
-            {pdfStatus&&(<div style={{marginTop:8,padding:"7px 10px",borderRadius:2,fontSize:11,background:pdfStatus.type==="error"?"rgba(244,63,94,.1)":pdfStatus.type==="success"?"rgba(34,197,94,.1)":"rgba(56,189,248,.1)",border:`1px solid ${pdfStatus.type==="error"?C.red:pdfStatus.type==="success"?C.green:C.blue}`,color:pdfStatus.type==="error"?C.red:pdfStatus.type==="success"?C.green:C.blue}}>{pdfStatus.msg}</div>)}
+            {pdfStatus&&(<div style={{marginTop:8,padding:"7px 10px",borderRadius:2,fontSize:13,background:pdfStatus.type==="error"?"rgba(244,63,94,.1)":pdfStatus.type==="success"?"rgba(34,197,94,.1)":"rgba(56,189,248,.1)",border:`1px solid ${pdfStatus.type==="error"?C.red:pdfStatus.type==="success"?C.green:C.blue}`,color:pdfStatus.type==="error"?C.red:pdfStatus.type==="success"?C.green:C.blue}}>{pdfStatus.msg}</div>)}
           </div>
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
-            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>PROYECCIÓN — IMÁGENES PERSONALIZADAS</div>
-            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.4}}>
+            <div style={{color:C.accent,fontSize:13,letterSpacing:2,marginBottom:8}}>PROYECCIÓN — IMÁGENES PERSONALIZADAS</div>
+            <div style={{fontSize:13,color:C.muted,marginBottom:10,lineHeight:1.4}}>
               Proyecta logos, emblemas o cualquier imagen sobre el tablero. Útil para logos de tienda, emblemas de facción o marcadores personalizados.
             </div>
             <OverlayManager overlays={overlays} setOverlays={setOverlays} players={players}/>
           </div>
           <div className="panel" style={{borderRadius:2,padding:14,marginBottom:10}}>
-            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>MARCADORES ARUCO — CALIBRACIÓN DE CÁMARA</div>
-            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.4}}>Genera marcadores ArUco temáticos por facción para las 4 esquinas del tablero. La cámara cenital los detecta automáticamente para calibrar posición y escala en tiempo real.</div>
+            <div style={{color:C.accent,fontSize:13,letterSpacing:2,marginBottom:8}}>MARCADORES ARUCO — CALIBRACIÓN DE CÁMARA</div>
+            <div style={{fontSize:13,color:C.muted,marginBottom:10,lineHeight:1.4}}>Genera marcadores ArUco temáticos por facción para las 4 esquinas del tablero. La cámara cenital los detecta automáticamente para calibrar posición y escala en tiempo real.</div>
             <ArucoGenerator/>
           </div>
           <div className="panel" style={{borderRadius:2,padding:14}}>
-            <div style={{color:C.accent,fontSize:11,letterSpacing:2,marginBottom:8}}>PATRULLAS DISPONIBLES ({patrols.length})</div>
+            <div style={{color:C.accent,fontSize:13,letterSpacing:2,marginBottom:8}}>PATRULLAS DISPONIBLES ({patrols.length})</div>
             {patrols.map(p=>{const fc=FACTION_COLORS[p.faction_keyword]||C.blue;return(
               <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:C.bg,borderRadius:2,marginBottom:3,borderLeft:`2px solid ${fc}`}}>
                 <div style={{width:5,height:5,borderRadius:"50%",background:fc,flexShrink:0}}/>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:12,color:C.text,fontWeight:700}}>{p.patrol_name}</div>
-                  <div style={{fontSize:11,color:C.muted}}>{p.faction} · {p.system} · {p.game_mode}</div>
+                  <div style={{fontSize:13,color:C.text,fontWeight:700}}>{p.patrol_name}</div>
+                  <div style={{fontSize:13,color:C.muted}}>{p.faction} · {p.system} · {p.game_mode}</div>
                 </div>
-                <span style={{fontSize:11,color:fc}}>{p.units?.length||0} uds</span>
-                {!EMBEDDED_PATROLS.find(e=>e.id===p.id)&&(<button onClick={()=>setPatrols(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"1px 6px",fontSize:12,color:C.red,borderColor:C.red}}>✕</button>)}
+                <span style={{fontSize:13,color:fc}}>{p.units?.length||0} uds</span>
+                {!EMBEDDED_PATROLS.find(e=>e.id===p.id)&&(<button onClick={()=>setPatrols(prev=>prev.filter(x=>x.id!==p.id))} className="rb" style={{padding:"1px 6px",fontSize:13,color:C.red,borderColor:C.red}}>✕</button>)}
               </div>
             );})}
           </div>
@@ -2669,7 +2687,7 @@ function App(){
           <div className="panel fade-in" style={{borderRadius:4,padding:22,width:360,borderColor:C.blue}} onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
               <span style={{color:C.blue,fontWeight:700,letterSpacing:2,fontSize:13}}>// ÍNDICE DE AURAS</span>
-              <button onClick={()=>setShowLegend(false)} className="rb" style={{padding:"2px 8px",fontSize:12}}>✕</button>
+              <button onClick={()=>setShowLegend(false)} className="rb" style={{padding:"2px 8px",fontSize:13}}>✕</button>
             </div>
             {[
               {key:"move",    label:"M — MOVIMIENTO",   desc:'Radio de movimiento en pulgadas.'},
@@ -2683,13 +2701,13 @@ function App(){
               <div key={key} style={{marginBottom:8,padding:10,background:C.bg,borderRadius:2,borderLeft:`3px solid ${color}`}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
                   <div style={{width:7,height:7,borderRadius:"50%",background:color}}/>
-                  <span style={{fontWeight:700,fontSize:12,color,letterSpacing:1}}>{label}</span>
+                  <span style={{fontWeight:700,fontSize:13,color,letterSpacing:1}}>{label}</span>
                 </div>
-                <p style={{fontSize:12,color:C.muted,lineHeight:1.4}}>{desc}</p>
+                <p style={{fontSize:13,color:C.muted,lineHeight:1.4}}>{desc}</p>
               </div>
               );
             })}
-            <div style={{fontSize:12,color:C.muted,textAlign:"center",marginTop:6}}>CLIC FUERA PARA CERRAR</div>
+            <div style={{fontSize:13,color:C.muted,textAlign:"center",marginTop:6}}>CLIC FUERA PARA CERRAR</div>
           </div>
         </div>
       )}
